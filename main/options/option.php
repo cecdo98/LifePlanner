@@ -121,7 +121,6 @@
             <th>Ações</th>
         </tr>
         <?php
-            // IMPORTANTE: Incluí o 'id' no SELECT para podermos apagar/editar
             $stmt = $conn->prepare("SELECT id, amount, date, description, nif FROM transactions WHERE category_id = ? AND user_id = ? ORDER BY date DESC");
             $stmt->bind_param("ii", $category_id, $user_id);
             $stmt->execute();
@@ -139,7 +138,8 @@
                            onclick="return confirm('Tem a certeza?')">Apagar</a>
                     </td>
                 </tr>
-            <?php endwhile; ?>
+            <?php endwhile; 
+        ?>
     </table>
 </body>
 </html>

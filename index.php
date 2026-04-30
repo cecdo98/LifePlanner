@@ -29,6 +29,7 @@
         
     }
 
+
     function login($conn,$username,$password) {
        
         $stmt = $conn->prepare("SELECT * FROM users WHERE username = ? AND password_hash = ?");
@@ -39,11 +40,18 @@
         $result = $stmt->get_result();
 
         if ($result->num_rows > 0) {
-            redirect();
-        } else {
-            return "Utilizador ou password incorretos.";
-        }
+        
+        $user = $result->fetch_assoc();
+        
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['username'] = $user['username'];
+
+        redirect();
+    } else {
+        return "Utilizador ou password incorretos.";
     }
+    }
+
 
     function redirect() {
         $url = './main/dashboard/dashboard.php';
