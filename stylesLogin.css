@@ -1,73 +1,115 @@
-body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f6f8;
-    margin: 0;
-    padding: 0;
-}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-.login-container {
-    width: 350px;
-    margin: 100px auto;
-    padding: 25px;
-    background-color: #ffffff;
-    border-radius: 10px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
+  :root {
+    --bg:      #f5f6f8;
+    --card:    #ffffff;
+    --border:  #e2e5ea;
+    --accent:  #2563eb;
+    --danger:  #dc2626;
+    --text:    #111827;
+    --muted:   #6b7280;
+    --radius:  8px;
+    --font:    -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
 
-h2 {
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .login-wrap {
+    width: 100%;
+    max-width: 380px;
+    padding: 16px;
+  }
+
+  .brand {
     text-align: center;
+    margin-bottom: 28px;
+  }
+  .brand-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .brand-sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+  }
+
+  .card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
     margin-bottom: 20px;
-}
+    letter-spacing: -0.01em;
+  }
 
-.form-group {
-    margin-bottom: 15px;
-}
+  .form-stack { display: flex; flex-direction: column; gap: 14px; }
 
-label {
-    display: block;
-    margin-bottom: 5px;
-}
-
-input[type="text"],
-input[type="password"] {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
+  .form-field { display: flex; flex-direction: column; gap: 5px; }
+  .form-field label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .form-field input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 11px;
     border-radius: 5px;
-    box-sizing: border-box;
-}
-
-
-input[type="text"],
-input[type="password"] {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    box-sizing: border-box;
-}
-
-input[type="text"]:focus,
-input[type="password"]:focus {
-    border-color:#4ca3af;
+    font-family: var(--font);
+    font-size: 0.9rem;
     outline: none;
-}
+    transition: border-color 0.12s;
+    width: 100%;
+  }
+  .form-field input:focus { border-color: var(--accent); }
+  .form-field input.has-error { border-color: var(--danger); }
 
-input[type="submit"] {
-    background-color: #4ca3af;
-    color: white;
-    padding: 10px;
-    border: none;
+  .field-error {
+    font-size: 0.75rem;
+    color: var(--danger);
+    min-height: 14px;
+  }
+
+  .alert-error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: var(--danger);
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 9px 12px;
     border-radius: 5px;
+  }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 0.88rem;
+    font-weight: 600;
     cursor: pointer;
     width: 100%;
-}
-
-input[type="submit"]:hover {
-    background-color:  #37767e;
-}
-
-.error {
-    color: red;
-    font-size: 12px;
-}
+    transition: opacity 0.12s;
+    margin-top: 4px;
+  }
+  .btn:hover { opacity: 0.88; }
