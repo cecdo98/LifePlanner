@@ -1,6 +1,6 @@
 <?php
     session_start();
-    include_once "../../config/bd.php";
+    include_once "./bd.php";
 
     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
   
@@ -36,15 +36,15 @@
         $stmt->bind_param("iiiddd", $user_id, $year, $month, $total_spent, $salary, $final_balance);
 
         if ($stmt->execute()) {
-            // REDIRECIONAMENTO DE VOLTA (Garante que passas o ano e mês na URL para manter o filtro)
-            header("Location: dashboard.php?year=$year&month=$month");
+            // REDIRECIONAMENTO DE VOLTA 
+            header("Location: ../main/dashboard/dashboard.php?year=$year&month=$month");
             exit(); // CRUCIAL: Impede que o script continue a correr
         } else {
             echo "Erro ao guardar: " . $conn->error;
         }
     } else {
         // Se tentarem aceder ao ficheiro sem ser por POST, volta ao dashboard
-        header("Location: dashboard.php");
+        header("Location: ../main/dashboard/dashboard.php");
         exit();
     }
 ?>

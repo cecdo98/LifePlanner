@@ -28,8 +28,8 @@
     }
 
     // 4. CALCULAR O TOTAL GASTO ATUAL (Sincronização)
-    $stmtTotal = $conn->prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ? AND nif = ?");
-    $stmtTotal->bind_param("iiii", $user_id, $year, $month, $nif);
+    $stmtTotal = $conn->prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ? "); #AND nif = ?
+    $stmtTotal->bind_param("iii", $user_id, $year, $month);
     $stmtTotal->execute();
     $totalGasto = (float)($stmtTotal->get_result()->fetch_assoc()['total'] ?? 0);
     $restante = $salary - $totalGasto;
@@ -72,6 +72,14 @@
         5 => "Maio", 6 => "Junho", 7 => "Julho", 8 => "Agosto",
         9 => "Setembro", 10 => "Outubro", 11 => "Novembro", 12 => "Dezembro"
     ];
+
+    $dataPoints = array();
+
+    while($row = $result->fetch_assoc()) {
+        $dataPoints[] = array("label"=> $row['categoria'], "y"=> (float)$row['total']);
+    }
+    
+
 ?>
 
 <html>
@@ -83,17 +91,49 @@
         th { background-color: #f2f2f2; }
         .box-salario { border: 1px solid #007bff; background: #eef7ff; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
     </style>
-    <link rel="stylesheet" href="../../styles.css">
+    <link rel="stylesheet" href="./stylesDashboard.css">
+    <script>
+        window.onload = function () {
+
+        var chart = new CanvasJS.Chart("chartContainer", {
+            animationEnabled: false,
+            exportEnabled: true,
+            title:{
+                text: "Grafico Mensais"
+            },
+            subtitles: [{
+                text: "Em Euros (€)"
+            }],
+            data: [{
+                type: "pie",
+                showInLegend: "true",
+                legendText: "{label}",
+                indexLabelFontSize: 16,
+                indexLabel: "{label} - #percent%",
+                yValueFormatString: "€#,##0.00",
+                dataPoints: <?php echo json_encode($dataPoints, JSON_NUMERIC_CHECK); ?>
+            }]
+        });
+        chart.render();
+
+        }
+    </script>
 </head>
 <body>
-    <ul>
-        <li><a href="../dashboard/dashboard.php">Home</a></li>
-        <li><a href="../options/option.php?cat=1">Carro</a></li>
-        <li><a href="../options/option.php?cat=2">Ginásio</a></li>
-        <li><a href="../options/option.php?cat=3">Entretenimento</a></li>
-        <li><a href="../options/option.php?cat=4">Saúde</a></li>
-        <li><a href="../options/option.php?cat=5">Educação</a></li>
-        <li><a href="../options/option.php?cat=6">Outros</a></li>
+    <ul style="display: flex; justify-content: space-between; list-style: none; padding: 10px;">
+        <div>
+            <li><a href="../dashboard/dashboard.php">Home</a></li>
+            <li><a href="../options/option.php?cat=1">Carro</a></li>
+            <li><a href="../options/option.php?cat=2">Ginásio</a></li>
+            <li><a href="../options/option.php?cat=3">Entretenimento</a></li>
+            <li><a href="../options/option.php?cat=4">Saúde</a></li>
+            <li><a href="../options/option.php?cat=5">Educação</a></li>
+            <li><a href="../options/option.php?cat=6">Outros</a></li>
+        </div>
+        <div>
+            <li><a href="../settings/settings.php">Configurações</a></li>
+            <li><a href="../../config/logout.php">Sair</a></li>
+        </div>
     </ul>
 
     <h1>Dashboard de <?php echo $meses[$month] . " " . $year; ?></h1>
@@ -105,7 +145,7 @@
                     <tr>
                         <td>Ano: 
                             <select name="year">
-                                <?php for ($i = 2024; $i <= 2030; $i++): ?>
+                                <?php for ($i = 2026; $i <= 2070; $i++): ?>
                                     <option value="<?php echo $i; ?>" <?php if ($i == $year) echo 'selected'; ?>><?php echo $i; ?></option>
                                 <?php endfor; ?>
                             </select>
@@ -131,24 +171,24 @@
                     <th>Categoria</th>
                     <th>Valor Gasto</th>
                 </tr>
-                <?php while($row = $result->fetch_assoc()): ?>
-                <tr>
-                    <td><?php echo $row['categoria']; ?></td>
-                    <td><?php echo number_format($row['total'], 2, ',', '.') . " €"; ?></td>
-                </tr>
-                <?php endwhile; ?>
+                <?php foreach ($result as $row): ?>
+                    <tr>
+                        <td><?php echo $row['categoria']; ?></td>
+                        <td style="color: <?php echo $row['total'] > 0 ? 'red' : 'black'; ?>;"><?php echo number_format($row['total'], 2, ',', '.') . " €"; ?></td>
+                    </tr>
+                <?php endforeach; ?>
             </table>
         </div>
 
         <div style="flex-grow: 1;">
             <div class="box-salario">
-                <h3>Definir Ordenado Mensal</h3>
-                <form action="save_salary.php" method="post">
+                <h3>Definir Ordenado Mensal</h3><br>
+                <form action="../../config/save_salary.php" method="post">
                     <input type="hidden" name="year" value="<?php echo $year; ?>">
                     <input type="hidden" name="month" value="<?php echo $month; ?>">
-                    <label>Valor para <?php echo $meses[$month]; ?>:</label><br><br>
+                    <label>Valor para <?php echo $meses[$month]; ?>:</label>
                     <input type="number" step="0.01" name="salary" value="<?php echo $salary; ?>" required style="width: 100px;">
-                    <input type="submit" value="Guardar na BD">
+                    <input type="submit" value="Guardar na BD" style="width: 130px;">
                 </form>
             </div>
 
@@ -169,5 +209,14 @@
             </table>
         </div>
     </div>
+
+    <div>
+        <h1>Graficos</h1><br>
+        <div>
+            <div id="chartContainer" style="height: 370px; width: 30%;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.canvasjs.com/canvasjs.min.js"></script>
 </body>
 </html>

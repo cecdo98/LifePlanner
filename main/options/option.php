@@ -20,18 +20,19 @@
         $amount = $_POST["amount"];
         $date = $_POST["date"];
         $description = $_POST["description"];
+        $detail = $_POST["detail"];
         $nif = $_POST["nif"];
         $cat_to_save = $_POST["category_id"];
         
         if (isset($_POST['edit_id']) && !empty($_POST['edit_id'])) {
             // Update
             $edit_id = intval($_POST['edit_id']);
-            $stmt = $conn->prepare("UPDATE transactions SET amount=?, date=?, description=?, nif=? WHERE id=? AND user_id=?");
-            $stmt->bind_param("sssiii", $amount, $date, $description, $nif, $edit_id, $user_id);
+            $stmt = $conn->prepare("UPDATE transactions SET amount=?, date=?, description=?, detail=?, nif=? WHERE id=? AND user_id=?");
+            $stmt->bind_param("ssssiii", $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
         } else {
             // Insert
-            $stmt = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, nif) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("iisssi", $user_id, $cat_to_save, $amount, $date, $description, $nif);
+            $stmt = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("iissssi", $user_id, $cat_to_save, $amount, $date, $description, $detail, $nif);
         }
 
         $stmt->execute();
@@ -59,17 +60,23 @@
 <html>
 <head>
     <title>Life Planner - <?php echo $nome_categoria; ?></title>
-    <link rel="stylesheet" href="../../styles.css">
+    <link rel="stylesheet" href="./stylesOption.css">
 </head>
 <body>
-    <ul>
-        <li><a href="../dashboard/dashboard.php">Home</a></li>
-        <li><a href="option.php?cat=1">Carro</a></li>
-        <li><a href="option.php?cat=2">Ginásio</a></li>
-        <li><a href="option.php?cat=3">Entretenimento</a></li>
-        <li><a href="option.php?cat=4">Saúde</a></li>
-        <li><a href="option.php?cat=5">Educação</a></li>
-        <li><a href="option.php?cat=6">Outros</a></li>
+    <ul style="display: flex; justify-content: space-between; list-style: none; padding: 10px;">
+        <div>
+            <li><a href="../dashboard/dashboard.php">Home</a></li>
+            <li><a href="../options/option.php?cat=1">Carro</a></li>
+            <li><a href="../options/option.php?cat=2">Ginásio</a></li>
+            <li><a href="../options/option.php?cat=3">Entretenimento</a></li>
+            <li><a href="../options/option.php?cat=4">Saúde</a></li>
+            <li><a href="../options/option.php?cat=5">Educação</a></li>
+            <li><a href="../options/option.php?cat=6">Outros</a></li>
+        </div>
+        <div>
+            <li><a href="../settings/settings.php">Configurações</a></li>
+            <li><a href="../../config/logout.php">Sair</a></li>
+        </div>
     </ul>
 
     <h1><?php echo $nome_categoria; ?></h1>
@@ -91,6 +98,10 @@
             <tr>
                 <td><label for="description">Descrição:</label></td>
                 <td><textarea name="description" required><?php echo $edit_data['description'] ?? ''; ?></textarea></td>
+            </tr>
+             <tr>
+                <td><label for="detail">Detalhes:</label></td>
+                <td><textarea name="detail" required><?php echo $edit_data['detail'] ?? ''; ?></textarea></td>
             </tr>
             <tr>
                 <td><label for="nif">NIF:</label></td>
@@ -117,11 +128,12 @@
             <th>Valor</th>
             <th>Data</th>
             <th>Descrição</th>
+            <th>Detalhes</th>
             <th>NIF</th>
             <th>Ações</th>
         </tr>
         <?php
-            $stmt = $conn->prepare("SELECT id, amount, date, description, nif FROM transactions WHERE category_id = ? AND user_id = ? ORDER BY date DESC");
+            $stmt = $conn->prepare("SELECT id, amount, date, description, detail, nif FROM transactions WHERE category_id = ? AND user_id = ? ORDER BY date DESC");
             $stmt->bind_param("ii", $category_id, $user_id);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -131,6 +143,7 @@
                     <td><?php echo number_format($row["amount"], 2); ?> €</td>
                     <td><?php echo date('d/m/Y', strtotime($row["date"])); ?></td>
                     <td><?php echo htmlspecialchars($row["description"]); ?></td>
+                    <td><?php echo htmlspecialchars($row["detail"]); ?></td>
                     <td><?php echo $row["nif"] ? "Sim" : "Não"; ?></td>
                     <td>
                         <a class="edit" href="option.php?cat=<?php echo $category_id; ?>&edit_id=<?php echo $row['id']; ?>">Editar</a> | 
