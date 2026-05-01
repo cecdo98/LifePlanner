@@ -21,7 +21,7 @@
     $stmtSalary->execute();
     $resSalary = $stmtSalary->get_result()->fetch_assoc();
 
-    $salary = $resSalary ? (float)$resSalary['salary'] : (isset($_GET['salary']) ? (float)$_GET['salary'] : 1350.00);
+    $salary = $resSalary ? (float)$resSalary['salary'] : (isset($_GET['salary']) ? (float)$_GET['salary'] : 0.00);
 
     // 4. Calcular total gasto atual
     $stmtTotal = $conn->prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ?");
