@@ -97,10 +97,10 @@
     // ==========================================
 
     // PC 1 Portátil
-    $caminhoPC1 = "C:/Users/Utilizador1/OneDrive/Documentos/financas.sqlite";
+    $caminhoPC1 = "C:\Users\carlo\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
 
     // PC 2 Desktop
-    $caminhoPC2 = "C:/Users/Carlos/OneDrive/Ambiente de Trabalho/Engenharia de Informática/pessoal/financas.sqlite";
+    $caminhoPC2 = "C:\Users\Carlos\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
 
     // Fallback (Se não encontrar nenhum, procura na pasta do script)
     $caminhoLocal = __DIR__ . "/financas.sqlite";

@@ -112,10 +112,10 @@
     $navLinks = [
         ["../dashboard/dashboard.php", "Inicio"],
         ["../options/option.php?cat=1", "Carro"],
-        ["../options/option.php?cat=2", "Ginasio"],
+        ["../options/option.php?cat=2", "Ginásio"],
         ["../options/option.php?cat=3", "Entretenimento"],
-        ["../options/option.php?cat=4", "Saude"],
-        ["../options/option.php?cat=5", "Educacao"],
+        ["../options/option.php?cat=4", "Saúde"],
+        ["../options/option.php?cat=5", "Educação"],
         ["../options/option.php?cat=6", "Outros"],
     ];
 ?>
@@ -137,7 +137,7 @@
     <?php endforeach; ?>
   </ul>
   <ul class="nav-right">
-    <li><a href="../settings/settings.php">Definicoes</a></li>
+    <li><a href="../settings/settings.php">Definições</a></li>
     <li><a href="../../config/logout.php">Sair</a></li>
   </ul>
 </nav>

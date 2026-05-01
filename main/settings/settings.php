@@ -49,10 +49,10 @@ $user = $stmt->get_result()->fetch_assoc();
 $navLinks = [
     ["../dashboard/dashboard.php", "Inicio"],
     ["../options/option.php?cat=1", "Carro"],
-    ["../options/option.php?cat=2", "Ginasio"],
+    ["../options/option.php?cat=2", "Ginásio"],
     ["../options/option.php?cat=3", "Entretenimento"],
-    ["../options/option.php?cat=4", "Saude"],
-    ["../options/option.php?cat=5", "Educacao"],
+    ["../options/option.php?cat=4", "Saúde"],
+    ["../options/option.php?cat=5", "Educação"],
     ["../options/option.php?cat=6", "Outros"],
 ];
 ?>
@@ -61,7 +61,7 @@ $navLinks = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Definicoes — LifePlanner</title>
+    <title>Definições — LifePlanner</title>
     <link rel="stylesheet" href="./stylesSettings.css">
 </head>
 <body>
@@ -74,15 +74,15 @@ $navLinks = [
     <?php endforeach; ?>
   </ul>
   <ul class="nav-right">
-    <li><a href="../settings/settings.php" class="active">Definicoes</a></li>
+    <li><a href="../settings/settings.php" class="active">Definições</a></li>
     <li><a href="../../config/logout.php">Sair</a></li>
   </ul>
 </nav>
 
 <div class="page">
 
-  <h1 class="page-title">Definicoes</h1>
-  <p class="page-subtitle">Gere a tua conta e preferencias.</p>
+  <h1 class="page-title">Definições</h1>
+  <p class="page-subtitle">Gere a tua conta e preferências.</p>
 
   <?php if ($success): ?>
   <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>

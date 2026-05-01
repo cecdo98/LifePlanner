@@ -123,10 +123,10 @@ $jsBorderColors = json_encode(array_map(function($d) {
 $navLinks = [
     ["../dashboard/dashboard.php", "Inicio"],
     ["../options/option.php?cat=1", "Carro"],
-    ["../options/option.php?cat=2", "Ginasio"],
+    ["../options/option.php?cat=2", "Ginásio"],
     ["../options/option.php?cat=3", "Entretenimento"],
-    ["../options/option.php?cat=4", "Saude"],
-    ["../options/option.php?cat=5", "Educacao"],
+    ["../options/option.php?cat=4", "Saúde"],
+    ["../options/option.php?cat=5", "Educação"],
     ["../options/option.php?cat=6", "Outros"],
 ];
 ?>
@@ -152,7 +152,7 @@ $navLinks = [
     <?php endforeach; ?>
   </ul>
   <ul class="nav-right">
-    <li><a href="../settings/settings.php">Definicoes</a></li>
+    <li><a href="../settings/settings.php">Definições</a></li>
     <li><a href="../../config/logout.php">Sair</a></li>
   </ul>
 </nav>
@@ -190,7 +190,7 @@ $navLinks = [
         <input type="date" id="date" name="date"
                value="<?= htmlspecialchars($edit_data['date'] ?? date('Y-m-d')) ?>" required>
 
-        <label for="description">Descricao</label>
+        <label for="description">Descrição</label>
         <textarea id="description" name="description" required><?= htmlspecialchars($edit_data['description'] ?? '') ?></textarea>
 
         <label for="detail">Detalhes</label>
@@ -249,10 +249,10 @@ $navLinks = [
         <tr>
           <th>Valor</th>
           <th>Data</th>
-          <th>Descricao</th>
+          <th>Descrição</th>
           <th>Detalhes</th>
           <th>NIF</th>
-          <th>Acoes</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody>
