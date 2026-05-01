@@ -250,6 +250,7 @@ $navLinks = [
           <th>Valor</th>
           <th>Data</th>
           <th>Descricao</th>
+          <th>Detalhes</th>
           <th>NIF</th>
           <th>Acoes</th>
         </tr>
@@ -266,9 +267,10 @@ $navLinks = [
             <?php endif; ?>
           </td>
           <td>
-            <span class="nif-badge <?= $row['nif'] ? 'nif-sim' : 'nif-nao' ?>">
-              <?= $row['nif'] ? 'Sim' : 'Nao' ?>
-            </span>
+            <?= htmlspecialchars($row['detail']) ?>
+          </td>
+          <td>
+              <?= htmlspecialchars($row['nif']) == 1 ? 'Sim' : 'Nao' ?>
           </td>
           <td style="white-space:nowrap">
             <a class="action-link action-edit"

@@ -34,12 +34,12 @@
     $stmtSync = $conn->prepare("
         INSERT INTO monthly_summary (user_id, year, month, total_spent, salary, final_balance)
         VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            total_spent   = VALUES(total_spent),
-            salary        = VALUES(salary),
-            final_balance = VALUES(final_balance)
+        ON CONFLICT(user_id, year, month) DO UPDATE SET
+            total_spent   = excluded.total_spent,
+            salary        = excluded.salary,
+            final_balance = excluded.final_balance
     ");
-    $stmtSync->bind_param("iiiddd", $user_id, $year, $month, $totalGasto, $salary, $restante);
+    $stmtSync->bind_param("iiidd", $user_id, $year, $month, $totalGasto, $salary, $restante);
     $stmtSync->execute();
 
     // 6. Query para categorias (gráfico de pizza + tabela)

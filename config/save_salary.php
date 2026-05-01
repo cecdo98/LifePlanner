@@ -27,11 +27,10 @@
         // 3. Gravar ou Atualizar na tabela monthly_summary
         $sql = "INSERT INTO monthly_summary (user_id, year, month, total_spent, salary, final_balance)
                 VALUES (?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
-                    salary = VALUES(salary),
-                    total_spent = VALUES(total_spent),
-                    final_balance = VALUES(final_balance)";
-
+                ON CONFLICT(user_id, year, month) DO UPDATE SET
+                    salary = excluded.salary,
+                    total_spent = excluded.total_spent,
+                    final_balance = excluded.final_balance";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("iiiddd", $user_id, $year, $month, $total_spent, $salary, $final_balance);
 
