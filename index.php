@@ -62,7 +62,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">Iniciar sessao</div>
+    <div class="card-title" style="text-align:center">Iniciar sessão</div>
 
     <form method="post" action="<?= htmlspecialchars($_SERVER["PHP_SELF"]) ?>" autocomplete="off">
       <div class="form-stack">

@@ -156,7 +156,7 @@
       <div class="filter-group">
         <label>Ano</label>
         <select name="year">
-          <?php for ($i = 2024; $i <= 2070; $i++): ?>
+          <?php for ($i = 2026; $i <= 2070; $i++): ?>
           <option value="<?= $i ?>" <?= $i == $year ? 'selected' : '' ?>><?= $i ?></option>
           <?php endfor; ?>
         </select>

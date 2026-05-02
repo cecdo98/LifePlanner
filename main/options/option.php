@@ -241,7 +241,7 @@
       <form method="get" action="" style="display:flex; gap:8px; align-items:center; margin:0;">
         <input type="hidden" name="cat" value="<?= $category_id ?>">
         <select name="year" onchange="this.form.submit()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-family:var(--font);font-size:0.8rem;outline:none;cursor:pointer;">
-          <?php for ($y = (int)date('Y'); $y >= 2024; $y--): ?>
+          <?php for ($y = (int)date('Y'); $y >= 2026; $y--): ?>
           <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?></option>
           <?php endfor; ?>
         </select>
@@ -274,9 +274,6 @@
           <td style="white-space:nowrap"><?= date('d/m/Y', strtotime($row['date'])) ?></td>
           <td>
             <?= htmlspecialchars($row['description']) ?>
-            <?php if (!empty($row['detail'])): ?>
-            <div class="detail-text"><?= htmlspecialchars($row['detail']) ?></div>
-            <?php endif; ?>
           </td>
           <td>
             <?= htmlspecialchars($row['detail']) ?>
@@ -307,7 +304,7 @@
       <form method="get" action="" style="display:flex; gap:8px; align-items:center; margin:0;">
         <input type="hidden" name="cat" value="<?= $category_id ?>">
         <select name="year" onchange="this.form.submit()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-family:var(--font);font-size:0.8rem;outline:none;cursor:pointer;">
-          <?php for ($y = (int)date('Y'); $y >= 2024; $y--): ?>
+          <?php for ($y = (int)date('Y'); $y >= 2026; $y--): ?>
           <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?></option>
           <?php endfor; ?>
         </select>
