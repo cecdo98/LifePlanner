@@ -23,6 +23,7 @@
 
   // --- INSERIR / EDITAR ---
   if ($_SERVER["REQUEST_METHOD"] === "POST") {
+      $category_id = isset($_POST['category_id']) ? intval($_POST['category_id']) : 1;
       $amount      = $_POST["amount"];
       $date        = $_POST["date"];
       $description = $_POST["description"];
@@ -32,8 +33,8 @@
 
       if (!empty($_POST['edit_id'])) {
           $edit_id = intval($_POST['edit_id']);
-          $stmt = $conn->prepare("UPDATE transactions SET amount=?, date=?, description=?, detail=?, nif=? WHERE id=? AND user_id=?");
-          $stmt->bind_param("sssssii", $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
+          $stmt = $conn->prepare("UPDATE transactions SET category_id=?, amount=?, date=?, description=?, detail=?, nif=? WHERE id=? AND user_id=?");
+          $stmt->bind_param("isssssii",$category_id, $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
       } else {
           $stmt = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?, ?, ?, ?, ?, ?, ?)");
           $stmt->bind_param("iissssi", $user_id, $cat_to_save, $amount, $date, $description, $detail, $nif);
@@ -42,6 +43,7 @@
       header("Location: option.php?cat=" . $cat_to_save . "&year=" . $year);
       exit();
   }
+
 
   // --- BUSCAR DADOS PARA EDITAR ---
   $edit_data = null;
@@ -183,6 +185,18 @@
 
       <div class="form-grid">
 
+        <!-- Col 1: Categoria + Valor -->
+        <label for="category_sel">Categoria</label>
+        <select name="category_id" id="category_sel" required>
+          <option value="1" <?= ($category_id == 1) ? 'selected' : '' ?>>Carro</option>
+          <option value="2" <?= ($category_id == 2) ? 'selected' : '' ?>>Ginásio</option>
+          <option value="3" <?= ($category_id == 3) ? 'selected' : '' ?>>Entretenimento</option>
+          <option value="4" <?= ($category_id == 4) ? 'selected' : '' ?>>Saúde</option>
+          <option value="5" <?= ($category_id == 5) ? 'selected' : '' ?>>Educação</option>
+          <option value="6" <?= ($category_id == 6) ? 'selected' : '' ?>>Outros</option>
+        </select>
+
+        <!-- Col 2: Valor + Data -->
         <label for="amount">Valor (€)</label>
         <input type="number" id="amount" name="amount" step="0.01" min="0"
                value="<?= htmlspecialchars($edit_data['amount'] ?? '') ?>" required>
@@ -191,12 +205,7 @@
         <input type="date" id="date" name="date"
                value="<?= htmlspecialchars($edit_data['date'] ?? date('Y-m-d')) ?>" required>
 
-        <label for="description">Descrição</label>
-        <textarea id="description" name="description" required><?= htmlspecialchars($edit_data['description'] ?? '') ?></textarea>
-
-        <label for="detail">Detalhes</label>
-        <textarea id="detail" name="detail"><?= htmlspecialchars($edit_data['detail'] ?? '') ?></textarea>
-
+        <!-- NIF na 2a coluna, mesma linha que Data -->
         <label>NIF</label>
         <div class="radio-group">
           <label>
@@ -211,12 +220,26 @@
           </label>
         </div>
 
-        <div></div>
-        <div class="form-actions">
-          <button type="submit" class="btn"><?= $edit_data ? 'Atualizar' : 'Adicionar' ?></button>
-          <?php if ($edit_data): ?>
-          <a href="option.php?cat=<?= $category_id ?>&year=<?= $year ?>" class="btn-ghost">Cancelar</a>
-          <?php endif; ?>
+        <!-- Descrição — linha completa -->
+        <div class="full-row">
+          <label for="description">Descrição</label>
+          <textarea id="description" name="description" required><?= htmlspecialchars($edit_data['description'] ?? '') ?></textarea>
+        </div>
+
+        <!-- Detalhes — linha completa -->
+        <div class="full-row">
+          <label for="detail">Detalhes</label>
+          <textarea id="detail" name="detail"><?= htmlspecialchars($edit_data['detail'] ?? '') ?></textarea>
+        </div>
+
+        <!-- Ações -->
+        <div class="form-actions-row">
+          <div class="form-actions" style="padding-left: 120px;">
+            <button type="submit" class="btn"><?= $edit_data ? 'Atualizar' : 'Adicionar' ?></button>
+            <?php if ($edit_data): ?>
+            <a href="option.php?cat=<?= $category_id ?>&year=<?= $year ?>" class="btn-ghost">Cancelar</a>
+            <?php endif; ?>
+          </div>
         </div>
 
       </div>
@@ -275,10 +298,12 @@
           </td>
           <td style="white-space:nowrap">
             <a class="action-link action-edit"
-               href="option.php?cat=<?= $category_id ?>&edit_id=<?= $row['id'] ?>&year=<?= $year ?>">Editar</a>
+               href="option.php?cat=<?= $category_id ?>&edit_id=<?= $row['id'] ?>&year=<?= $year ?>">Editar
+            </a>
             <a class="action-link action-delete"
                href="option.php?cat=<?= $category_id ?>&delete_id=<?= $row['id'] ?>&year=<?= $year ?>"
-               onclick="return confirm('Tem a certeza que quer apagar este registo?')">Apagar</a>
+               onclick="return confirm('Tem a certeza que quer apagar este registo?')">Apagar
+            </a>
           </td>
         </tr>
         <?php endwhile; ?>

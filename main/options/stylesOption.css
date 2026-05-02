@@ -1,4 +1,4 @@
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
     --bg:      #f5f6f8;
@@ -71,6 +71,22 @@
   }
   .page-title span { color: var(--accent); }
 
+  .form-grid select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.12s;
+}
+.form-grid select:focus { 
+    border-color: 
+    var(--accent); 
+}
+
   /* KPI strip */
   .kpi-row {
     display: grid;
@@ -115,16 +131,31 @@
   /* Form */
   .form-grid {
     display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 10px 16px;
-    align-items: center;
-    max-width: 560px;
+    grid-template-columns: repeat(2, 100px 1fr);
+    gap: 10px 20px;
+    align-items: start;
+    max-width: 860px;
   }
   .form-grid label {
     font-size: 0.82rem;
     font-weight: 500;
     color: var(--muted);
     text-align: right;
+    padding-top: 8px;
+  }
+  /* Items that should span full width */
+  .form-grid .full-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 10px 20px;
+    align-items: start;
+  }
+  .form-grid .full-row label {
+    text-align: right;
+  }
+  .form-actions-row {
+    grid-column: 1 / -1;
   }
   .form-grid input[type="number"],
   .form-grid input[type="date"],
@@ -144,8 +175,8 @@
   .form-grid input:focus,
   .form-grid textarea:focus { border-color: var(--accent); }
   .form-grid textarea { min-height: 60px; }
-  .radio-group { display: flex; gap: 14px; align-items: center; }
-  .radio-group label { color: var(--text); font-size: 0.85rem; font-weight: 400; cursor: pointer; text-align: left; }
+  .radio-group { display: flex; gap: 14px; align-items: center; padding-top: 6px; }
+  .radio-group label { color: var(--text); font-size: 0.85rem; font-weight: 400; cursor: pointer; text-align: left; padding-top: 0; }
   .radio-group input[type="radio"] { accent-color: var(--accent); }
   .form-actions { display: flex; gap: 8px; align-items: center; padding-top: 4px; }
 
@@ -225,6 +256,7 @@
     nav { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 6px; }
     .page { padding: 14px; }
     .kpi-row { grid-template-columns: 1fr 1fr; max-width: 100%; }
-    .form-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 100px 1fr; }
+    .form-grid .full-row { grid-column: 1 / -1; }
     .form-grid label { text-align: left; }
   }
