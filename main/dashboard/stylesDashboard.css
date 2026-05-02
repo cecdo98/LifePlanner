@@ -64,6 +64,17 @@ nav {
     background: var(--bg);
     color: var(--text);
 }
+.nav-right .btn-danger {
+    background-color: var(--danger);
+    color: #fff;
+    font-family: var(--font);
+  }
+.nav-right .btn-danger:hover { 
+    background-color: #ff0000;
+    opacity: 1;
+    color: #fff;
+    font-family: var(--font);
+}
 
 /* Layout */
 .page { 

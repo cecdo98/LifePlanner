@@ -75,7 +75,7 @@ $navLinks = [
   </ul>
   <ul class="nav-right">
     <li><a href="../settings/settings.php" class="active">Definições</a></li>
-    <li><a href="../../config/logout.php">Sair</a></li>
+    <li><a href="../../config/logout.php" class="btn-danger">Sair</a></li>
   </ul>
 </nav>
 

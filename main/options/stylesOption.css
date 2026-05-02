@@ -49,6 +49,17 @@
   .nav-links a:hover, .nav-right a:hover { background: var(--bg); color: var(--text); }
   .nav-links a.active { color: var(--accent); background: #eff6ff; }
 
+  .nav-right .btn-danger {
+    background-color: var(--danger);
+    color: #fff;
+    font-family: var(--font);
+  }
+  .nav-right .btn-danger:hover { 
+      background-color: #ff0000;
+      opacity: 1;
+      color: #fff;
+      font-family: var(--font);
+  }
   /* Layout */
   .page { padding: 28px; max-width: 1200px; margin: 0 auto; }
 

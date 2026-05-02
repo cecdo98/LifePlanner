@@ -138,7 +138,7 @@
   </ul>
   <ul class="nav-right">
     <li><a href="../settings/settings.php">Definições</a></li>
-    <li><a href="../../config/logout.php">Sair</a></li>
+    <li><a href="../../config/logout.php" class="btn btn-danger">Sair</a></li>
   </ul>
 </nav>
 
