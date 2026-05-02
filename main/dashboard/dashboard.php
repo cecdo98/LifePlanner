@@ -109,15 +109,14 @@
         $jsSpent[]   = $spentAnual[$m]   !== null ? $spentAnual[$m]   : 'null';
     }
 
-    $navLinks = [
-        ["../dashboard/dashboard.php", "Inicio"],
-        ["../options/option.php?cat=1", "Carro"],
-        ["../options/option.php?cat=2", "Ginásio"],
-        ["../options/option.php?cat=3", "Entretenimento"],
-        ["../options/option.php?cat=4", "Saúde"],
-        ["../options/option.php?cat=5", "Educação"],
-        ["../options/option.php?cat=6", "Outros"],
-    ];
+    // --- NAVLINKS DINÂMICOS ---
+    $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
+    $stmt_cats->execute();
+    $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
+    $res_cats = $stmt_cats->get_result();
+    while ($c = $res_cats->fetch_assoc()) {
+        $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
+    }
 ?>
 <!DOCTYPE html>
 <html lang="pt">

@@ -56,6 +56,10 @@
             }
             return null;
         }
+
+        public function fetch_all($mode = null) {
+            return $this->rows;
+        }
     }
 
     class MockMysqli {

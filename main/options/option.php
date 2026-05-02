@@ -55,6 +55,11 @@
       $edit_data = $stmt_edit->get_result()->fetch_assoc();
   }
 
+  //-- CATEGORIAS ---
+  $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
+  $stmt_cats->execute();
+  $all_categories = $stmt_cats->get_result()->fetch_all(MYSQLI_ASSOC);
+
   // --- NOME DA CATEGORIA ---
   $stmt_cat = $conn->prepare("SELECT name FROM categories WHERE id = ?");
   $stmt_cat->bind_param("i", $category_id);
@@ -122,15 +127,10 @@
       return '#dc2626';
   }, $chartDeltas));
 
-  $navLinks = [
-      ["../dashboard/dashboard.php", "Inicio"],
-      ["../options/option.php?cat=1", "Carro"],
-      ["../options/option.php?cat=2", "Ginásio"],
-      ["../options/option.php?cat=3", "Entretenimento"],
-      ["../options/option.php?cat=4", "Saúde"],
-      ["../options/option.php?cat=5", "Educação"],
-      ["../options/option.php?cat=6", "Outros"],
-  ];
+  $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
+  foreach ($all_categories as $c) {
+      $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
+  }
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -184,19 +184,16 @@
       <input type="hidden" name="edit_id"     value="<?= $edit_data['id'] ?? '' ?>">
 
       <div class="form-grid">
-
-        <!-- Col 1: Categoria + Valor -->
-        <label for="category_sel">Categoria</label>
-        <select name="category_id" id="category_sel" required>
-          <option value="1" <?= ($category_id == 1) ? 'selected' : '' ?>>Carro</option>
-          <option value="2" <?= ($category_id == 2) ? 'selected' : '' ?>>Ginásio</option>
-          <option value="3" <?= ($category_id == 3) ? 'selected' : '' ?>>Entretenimento</option>
-          <option value="4" <?= ($category_id == 4) ? 'selected' : '' ?>>Saúde</option>
-          <option value="5" <?= ($category_id == 5) ? 'selected' : '' ?>>Educação</option>
-          <option value="6" <?= ($category_id == 6) ? 'selected' : '' ?>>Outros</option>
+        <label for="category_id">Categoria</label>
+        <select name="category_id" required>
+          <?php foreach ($all_categories as $cat): ?>
+          <option value="<?= $cat['id'] ?>" <?= ($category_id == $cat['id']) ? 'selected' : '' ?>>
+            <?= htmlspecialchars($cat['name']) ?>
+          </option>
+          <?php endforeach; ?>
         </select>
 
-        <!-- Col 2: Valor + Data -->
+
         <label for="amount">Valor (€)</label>
         <input type="number" id="amount" name="amount" step="0.01" min="0"
                value="<?= htmlspecialchars($edit_data['amount'] ?? '') ?>" required>
@@ -205,7 +202,12 @@
         <input type="date" id="date" name="date"
                value="<?= htmlspecialchars($edit_data['date'] ?? date('Y-m-d')) ?>" required>
 
-        <!-- NIF na 2a coluna, mesma linha que Data -->
+        <label for="description">Descrição</label>
+        <textarea id="description" name="description" required><?= htmlspecialchars($edit_data['description'] ?? '') ?></textarea>
+
+        <label for="detail">Detalhes</label>
+        <textarea id="detail" name="detail"><?= htmlspecialchars($edit_data['detail'] ?? '') ?></textarea>
+
         <label>NIF</label>
         <div class="radio-group">
           <label>
@@ -220,26 +222,12 @@
           </label>
         </div>
 
-        <!-- Descrição — linha completa -->
-        <div class="full-row">
-          <label for="description">Descrição</label>
-          <textarea id="description" name="description" required><?= htmlspecialchars($edit_data['description'] ?? '') ?></textarea>
-        </div>
-
-        <!-- Detalhes — linha completa -->
-        <div class="full-row">
-          <label for="detail">Detalhes</label>
-          <textarea id="detail" name="detail"><?= htmlspecialchars($edit_data['detail'] ?? '') ?></textarea>
-        </div>
-
-        <!-- Ações -->
-        <div class="form-actions-row">
-          <div class="form-actions" style="padding-left: 120px;">
-            <button type="submit" class="btn"><?= $edit_data ? 'Atualizar' : 'Adicionar' ?></button>
-            <?php if ($edit_data): ?>
-            <a href="option.php?cat=<?= $category_id ?>&year=<?= $year ?>" class="btn-ghost">Cancelar</a>
-            <?php endif; ?>
-          </div>
+        <div></div>
+        <div class="form-actions">
+          <button type="submit" class="btn"><?= $edit_data ? 'Atualizar' : 'Adicionar' ?></button>
+          <?php if ($edit_data): ?>
+          <a href="option.php?cat=<?= $category_id ?>&year=<?= $year ?>" class="btn-ghost">Cancelar</a>
+          <?php endif; ?>
         </div>
 
       </div>
