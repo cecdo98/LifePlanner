@@ -1,60 +1,60 @@
 <?php
-session_start();
-include_once "../../config/bd.php";
+  session_start();
+  include_once "../../config/bd.php";
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../../index.php");
-    exit();
-}
+  if (!isset($_SESSION['user_id'])) {
+      header("Location: ../../index.php");
+      exit();
+  }
 
-$user_id  = $_SESSION['user_id'];
-$success  = '';
-$error    = '';
+  $user_id  = $_SESSION['user_id'];
+  $success  = '';
+  $error    = '';
 
-// --- ALTERAR PASSWORD ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+  // --- ALTERAR PASSWORD ---
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
-    if ($_POST['action'] === 'change_password') {
-        $current  = $_POST['current_password'] ?? '';
-        $new      = $_POST['new_password'] ?? '';
-        $confirm  = $_POST['confirm_password'] ?? '';
+      if ($_POST['action'] === 'change_password') {
+          $current  = $_POST['current_password'] ?? '';
+          $new      = $_POST['new_password'] ?? '';
+          $confirm  = $_POST['confirm_password'] ?? '';
 
-        $stmt = $conn->prepare("SELECT password_hash FROM users WHERE id = ?");
-        $stmt->bind_param("i", $user_id);
-        $stmt->execute();
-        $row = $stmt->get_result()->fetch_assoc();
+          $stmt = $conn->prepare("SELECT password_hash FROM users WHERE id = ?");
+          $stmt->bind_param("i", $user_id);
+          $stmt->execute();
+          $row = $stmt->get_result()->fetch_assoc();
 
-        if (!password_verify($current, $row['password_hash'])) {
-            $error = 'A password atual esta incorreta.';
-        } elseif (strlen($new) < 6) {
-            $error = 'A nova password deve ter pelo menos 6 caracteres.';
-        } elseif ($new !== $confirm) {
-            $error = 'As passwords nao coincidem.';
-        } else {
-            $hash = password_hash($new, PASSWORD_DEFAULT);
-            $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
-            $stmt->bind_param("si", $hash, $user_id);
-            $stmt->execute();
-            $success = 'Password alterada com sucesso.';
-        }
-    }
-}
+          if (!password_verify($current, $row['password_hash'])) {
+              $error = 'A password atual esta incorreta.';
+          } elseif (strlen($new) < 6) {
+              $error = 'A nova password deve ter pelo menos 6 caracteres.';
+          } elseif ($new !== $confirm) {
+              $error = 'As passwords nao coincidem.';
+          } else {
+              $hash = password_hash($new, PASSWORD_DEFAULT);
+              $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+              $stmt->bind_param("si", $hash, $user_id);
+              $stmt->execute();
+              $success = 'Password alterada com sucesso.';
+          }
+      }
+  }
 
-// --- BUSCAR DADOS DO UTILIZADOR ---
-$stmt = $conn->prepare("SELECT username FROM users WHERE id = ?");
-$stmt->bind_param("i", $user_id);
-$stmt->execute();
-$user = $stmt->get_result()->fetch_assoc();
+  // --- BUSCAR DADOS DO UTILIZADOR ---
+  $stmt = $conn->prepare("SELECT username FROM users WHERE id = ?");
+  $stmt->bind_param("i", $user_id);
+  $stmt->execute();
+  $user = $stmt->get_result()->fetch_assoc();
 
-$navLinks = [
-    ["../dashboard/dashboard.php", "Inicio"],
-    ["../options/option.php?cat=1", "Carro"],
-    ["../options/option.php?cat=2", "Ginásio"],
-    ["../options/option.php?cat=3", "Entretenimento"],
-    ["../options/option.php?cat=4", "Saúde"],
-    ["../options/option.php?cat=5", "Educação"],
-    ["../options/option.php?cat=6", "Outros"],
-];
+  $navLinks = [
+      ["../dashboard/dashboard.php", "Inicio"],
+      ["../options/option.php?cat=1", "Carro"],
+      ["../options/option.php?cat=2", "Ginásio"],
+      ["../options/option.php?cat=3", "Entretenimento"],
+      ["../options/option.php?cat=4", "Saúde"],
+      ["../options/option.php?cat=5", "Educação"],
+      ["../options/option.php?cat=6", "Outros"],
+  ];
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -63,6 +63,7 @@ $navLinks = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Definições — LifePlanner</title>
     <link rel="stylesheet" href="./stylesSettings.css">
+    <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico">
 </head>
 <body>
 

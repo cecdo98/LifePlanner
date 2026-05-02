@@ -1,142 +1,143 @@
 <?php
-session_start();
-include_once "../../config/bd.php";
+  session_start();
+  include_once "../../config/bd.php";
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../../index.php");
-    exit();
-}
+  if (!isset($_SESSION['user_id'])) {
+      header("Location: ../../index.php");
+      exit();
+  }
 
-$category_id = isset($_GET['cat'])  ? intval($_GET['cat'])  : 1;
-$year        = isset($_GET['year']) ? intval($_GET['year']) : (int)date('Y');
-$user_id     = $_SESSION['user_id'];
+  $category_id = isset($_GET['cat'])  ? intval($_GET['cat'])  : 1;
+  $year        = isset($_GET['year']) ? intval($_GET['year']) : (int)date('Y');
+  $user_id     = $_SESSION['user_id'];
 
-// --- APAGAR ---
-if (isset($_GET['delete_id'])) {
-    $id_to_delete = intval($_GET['delete_id']);
-    $stmt = $conn->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
-    $stmt->bind_param("ii", $id_to_delete, $user_id);
-    $stmt->execute();
-    header("Location: option.php?cat=" . $category_id . "&year=" . $year);
-    exit();
-}
+  // --- APAGAR ---
+  if (isset($_GET['delete_id'])) {
+      $id_to_delete = intval($_GET['delete_id']);
+      $stmt = $conn->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
+      $stmt->bind_param("ii", $id_to_delete, $user_id);
+      $stmt->execute();
+      header("Location: option.php?cat=" . $category_id . "&year=" . $year);
+      exit();
+  }
 
-// --- INSERIR / EDITAR ---
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $amount      = $_POST["amount"];
-    $date        = $_POST["date"];
-    $description = $_POST["description"];
-    $detail      = $_POST["detail"];
-    $nif         = $_POST["nif"];
-    $cat_to_save = (int)$_POST["category_id"];
+  // --- INSERIR / EDITAR ---
+  if ($_SERVER["REQUEST_METHOD"] === "POST") {
+      $amount      = $_POST["amount"];
+      $date        = $_POST["date"];
+      $description = $_POST["description"];
+      $detail      = $_POST["detail"];
+      $nif         = $_POST["nif"];
+      $cat_to_save = (int)$_POST["category_id"];
 
-    if (!empty($_POST['edit_id'])) {
-        $edit_id = intval($_POST['edit_id']);
-        $stmt = $conn->prepare("UPDATE transactions SET amount=?, date=?, description=?, detail=?, nif=? WHERE id=? AND user_id=?");
-        $stmt->bind_param("sssssii", $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
-    } else {
-        $stmt = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("iissssi", $user_id, $cat_to_save, $amount, $date, $description, $detail, $nif);
-    }
-    $stmt->execute();
-    header("Location: option.php?cat=" . $cat_to_save . "&year=" . $year);
-    exit();
-}
+      if (!empty($_POST['edit_id'])) {
+          $edit_id = intval($_POST['edit_id']);
+          $stmt = $conn->prepare("UPDATE transactions SET amount=?, date=?, description=?, detail=?, nif=? WHERE id=? AND user_id=?");
+          $stmt->bind_param("sssssii", $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
+      } else {
+          $stmt = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?, ?, ?, ?, ?, ?, ?)");
+          $stmt->bind_param("iissssi", $user_id, $cat_to_save, $amount, $date, $description, $detail, $nif);
+      }
+      $stmt->execute();
+      header("Location: option.php?cat=" . $cat_to_save . "&year=" . $year);
+      exit();
+  }
 
-// --- BUSCAR DADOS PARA EDITAR ---
-$edit_data = null;
-if (isset($_GET['edit_id'])) {
-    $id_to_fetch = intval($_GET['edit_id']);
-    $stmt_edit = $conn->prepare("SELECT * FROM transactions WHERE id = ? AND user_id = ?");
-    $stmt_edit->bind_param("ii", $id_to_fetch, $user_id);
-    $stmt_edit->execute();
-    $edit_data = $stmt_edit->get_result()->fetch_assoc();
-}
+  // --- BUSCAR DADOS PARA EDITAR ---
+  $edit_data = null;
+  if (isset($_GET['edit_id'])) {
+      $id_to_fetch = intval($_GET['edit_id']);
+      $stmt_edit = $conn->prepare("SELECT * FROM transactions WHERE id = ? AND user_id = ?");
+      $stmt_edit->bind_param("ii", $id_to_fetch, $user_id);
+      $stmt_edit->execute();
+      $edit_data = $stmt_edit->get_result()->fetch_assoc();
+  }
 
-// --- NOME DA CATEGORIA ---
-$stmt_cat = $conn->prepare("SELECT name FROM categories WHERE id = ?");
-$stmt_cat->bind_param("i", $category_id);
-$stmt_cat->execute();
-$nome_categoria = $stmt_cat->get_result()->fetch_assoc()['name'] ?? "Desconhecida";
+  // --- NOME DA CATEGORIA ---
+  $stmt_cat = $conn->prepare("SELECT name FROM categories WHERE id = ?");
+  $stmt_cat->bind_param("i", $category_id);
+  $stmt_cat->execute();
+  $nome_categoria = $stmt_cat->get_result()->fetch_assoc()['name'] ?? "Desconhecida";
 
-// --- TOTAL GASTO NESTA CATEGORIA ---
-$stmt_total = $conn->prepare("SELECT SUM(amount) AS total, COUNT(*) AS cnt FROM transactions WHERE category_id = ? AND user_id = ?");
-$stmt_total->bind_param("ii", $category_id, $user_id);
-$stmt_total->execute();
-$totals = $stmt_total->get_result()->fetch_assoc();
-$totalCategoria = (float)($totals['total'] ?? 0);
-$numRegistos    = (int)($totals['cnt'] ?? 0);
+  // --- TOTAL GASTO NESTA CATEGORIA ---
+  $stmt_total = $conn->prepare("SELECT SUM(amount) AS total, COUNT(*) AS cnt FROM transactions WHERE category_id = ? AND user_id = ?");
+  $stmt_total->bind_param("ii", $category_id, $user_id);
+  $stmt_total->execute();
+  $totals = $stmt_total->get_result()->fetch_assoc();
+  $totalCategoria = (float)($totals['total'] ?? 0);
+  $numRegistos    = (int)($totals['cnt'] ?? 0);
 
-// --- DADOS MENSAIS PARA O GRAFICO (ano selecionado) ---
-$stmtMensal = $conn->prepare("
-    SELECT MONTH(date) AS mes, SUM(amount) AS total
-    FROM transactions
-    WHERE category_id = ? AND user_id = ? AND YEAR(date) = ?
-    GROUP BY MONTH(date)
-    ORDER BY mes ASC
-");
-$stmtMensal->bind_param("iii", $category_id, $user_id, $year);
-$stmtMensal->execute();
-$resMensal = $stmtMensal->get_result();
+  // --- DADOS MENSAIS PARA O GRAFICO (ano selecionado) ---
+  $stmtMensal = $conn->prepare("
+      SELECT MONTH(date) AS mes, SUM(amount) AS total
+      FROM transactions
+      WHERE category_id = ? AND user_id = ? AND YEAR(date) = ?
+      GROUP BY MONTH(date)
+      ORDER BY mes ASC
+  ");
+  $stmtMensal->bind_param("iii", $category_id, $user_id, $year);
+  $stmtMensal->execute();
+  $resMensal = $stmtMensal->get_result();
 
-// Preencher array indexado por número do mês
-$mensalMap = [];
-while ($r = $resMensal->fetch_assoc()) {
-    $mensalMap[(int)$r['mes']] = (float)$r['total'];
-}
+  // Preencher array indexado por número do mês
+  $mensalMap = [];
+  while ($r = $resMensal->fetch_assoc()) {
+      $mensalMap[(int)$r['mes']] = (float)$r['total'];
+  }
 
-$mesesAbrev = [1=>'Jan',2=>'Fev',3=>'Mar',4=>'Abr',5=>'Mai',6=>'Jun',
-               7=>'Jul',8=>'Ago',9=>'Set',10=>'Out',11=>'Nov',12=>'Dez'];
-$chartLabels = [];
-$chartTotals = [];
-$chartDeltas = [];
+  $mesesAbrev = [1=>'Jan',2=>'Fev',3=>'Mar',4=>'Abr',5=>'Mai',6=>'Jun',
+                7=>'Jul',8=>'Ago',9=>'Set',10=>'Out',11=>'Nov',12=>'Dez'];
+  $chartLabels = [];
+  $chartTotals = [];
+  $chartDeltas = [];
 
-for ($m = 1; $m <= 12; $m++) {
-    $chartLabels[] = $mesesAbrev[$m];
-    $chartTotals[] = $mensalMap[$m] ?? 0;
-}
+  for ($m = 1; $m <= 12; $m++) {
+      $chartLabels[] = $mesesAbrev[$m];
+      $chartTotals[] = $mensalMap[$m] ?? 0;
+  }
 
-// Variação % em relação ao mês anterior (null se mês anterior = 0)
-for ($i = 0; $i < 12; $i++) {
-    $prev = $i > 0 ? $chartTotals[$i - 1] : null;
-    $curr = $chartTotals[$i];
-    if ($prev === null || $prev == 0) {
-        $chartDeltas[] = null;
-    } else {
-        $chartDeltas[] = round((($curr - $prev) / $prev) * 100, 1);
-    }
-}
+  // Variação % em relação ao mês anterior (null se mês anterior = 0)
+  for ($i = 0; $i < 12; $i++) {
+      $prev = $i > 0 ? $chartTotals[$i - 1] : null;
+      $curr = $chartTotals[$i];
+      if ($prev === null || $prev == 0) {
+          $chartDeltas[] = null;
+      } else {
+          $chartDeltas[] = round((($curr - $prev) / $prev) * 100, 1);
+      }
+  }
 
-$jsLabels  = json_encode($chartLabels);
-$jsTotals  = json_encode($chartTotals);
-$jsDeltas  = json_encode($chartDeltas);
-// Cores das barras: verde se desceu ou igual, vermelho se subiu
-$jsColors = json_encode(array_map(function($d) {
-    if ($d === null || $d <= 0) return 'rgba(22,163,74,0.75)';
-    return 'rgba(220,38,38,0.75)';
-}, $chartDeltas));
-$jsBorderColors = json_encode(array_map(function($d) {
-    if ($d === null || $d <= 0) return '#16a34a';
-    return '#dc2626';
-}, $chartDeltas));
+  $jsLabels  = json_encode($chartLabels);
+  $jsTotals  = json_encode($chartTotals);
+  $jsDeltas  = json_encode($chartDeltas);
+  // Cores das barras: verde se desceu ou igual, vermelho se subiu
+  $jsColors = json_encode(array_map(function($d) {
+      if ($d === null || $d <= 0) return 'rgba(22,163,74,0.75)';
+      return 'rgba(220,38,38,0.75)';
+  }, $chartDeltas));
+  $jsBorderColors = json_encode(array_map(function($d) {
+      if ($d === null || $d <= 0) return '#16a34a';
+      return '#dc2626';
+  }, $chartDeltas));
 
-$navLinks = [
-    ["../dashboard/dashboard.php", "Inicio"],
-    ["../options/option.php?cat=1", "Carro"],
-    ["../options/option.php?cat=2", "Ginásio"],
-    ["../options/option.php?cat=3", "Entretenimento"],
-    ["../options/option.php?cat=4", "Saúde"],
-    ["../options/option.php?cat=5", "Educação"],
-    ["../options/option.php?cat=6", "Outros"],
-];
+  $navLinks = [
+      ["../dashboard/dashboard.php", "Inicio"],
+      ["../options/option.php?cat=1", "Carro"],
+      ["../options/option.php?cat=2", "Ginásio"],
+      ["../options/option.php?cat=3", "Entretenimento"],
+      ["../options/option.php?cat=4", "Saúde"],
+      ["../options/option.php?cat=5", "Educação"],
+      ["../options/option.php?cat=6", "Outros"],
+  ];
 ?>
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= htmlspecialchars($nome_categoria) ?> — LifePlanner</title>
-<link rel="stylesheet" href="./stylesOption.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><?= htmlspecialchars($nome_categoria) ?> — LifePlanner</title>
+  <link rel="stylesheet" href="./stylesOption.css">
+  <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico">
 </head>
 <body>
 

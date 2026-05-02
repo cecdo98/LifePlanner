@@ -1,56 +1,57 @@
 <?php
-session_start();
-include_once "./config/bd.php";
+  session_start();
+  include_once "./config/bd.php";
 
-$usernameErr = $passwordErr = $loginErr = "";
-$username = "";
+  $usernameErr = $passwordErr = $loginErr = "";
+  $username = "";
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+  if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
-    if (empty($_POST["username"])) {
-        $usernameErr = "Username obrigatorio.";
-    } else {
-        $username = trim($_POST["username"]);
-        if (!preg_match("/^[a-zA-Z0-9_\-' ]*$/", $username)) {
-            $usernameErr = "Apenas letras, numeros e espacos.";
-        }
-    }
+      if (empty($_POST["username"])) {
+          $usernameErr = "Username obrigatorio.";
+      } else {
+          $username = trim($_POST["username"]);
+          if (!preg_match("/^[a-zA-Z0-9_\-' ]*$/", $username)) {
+              $usernameErr = "Apenas letras, numeros e espacos.";
+          }
+      }
 
-    if (empty($_POST["password"])) {
-        $passwordErr = "Password obrigatoria.";
-    }
+      if (empty($_POST["password"])) {
+          $passwordErr = "Password obrigatoria.";
+      }
 
-    if (!$usernameErr && !$passwordErr) {
-        $loginErr = login($conn, $username, $_POST["password"]);
-    }
-}
+      if (!$usernameErr && !$passwordErr) {
+          $loginErr = login($conn, $username, $_POST["password"]);
+      }
+  }
 
-function login($conn, $username, $password) {
-    $stmt = $conn->prepare("SELECT id, username, password_hash FROM users WHERE username = ?");
-    $stmt->bind_param("s", $username);
-    $stmt->execute();
-    $result = $stmt->get_result();
+  function login($conn, $username, $password) {
+      $stmt = $conn->prepare("SELECT id, username, password_hash FROM users WHERE username = ?");
+      $stmt->bind_param("s", $username);
+      $stmt->execute();
+      $result = $stmt->get_result();
 
-    if ($result->num_rows > 0) {
-        $user = $result->fetch_assoc();
-        if (password_verify($password, $user['password_hash'])) {
-            $_SESSION['user_id']  = $user['id'];
-            $_SESSION['username'] = $user['username'];
-            header('Location: ./main/dashboard/dashboard.php');
-            exit();
-        }
-        return "Password incorreta.";
-    }
-    return "Utilizador nao encontrado.";
-}
+      if ($result->num_rows > 0) {
+          $user = $result->fetch_assoc();
+          if (password_verify($password, $user['password_hash'])) {
+              $_SESSION['user_id']  = $user['id'];
+              $_SESSION['username'] = $user['username'];
+              header('Location: ./main/dashboard/dashboard.php');
+              exit();
+          }
+          return "Password incorreta.";
+      }
+      return "Utilizador nao encontrado.";
+  }
 ?>
 <!DOCTYPE html>
 <html lang="pt">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LifePlanner — Login</title>
-<link rel="stylesheet" href="./stylesLogin.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LifePlanner — Login</title>
+  <link rel="stylesheet" href="./stylesLogin.css">
+  <link rel="icon" type="image/x-icon" href="./assets/favicon.ico">
 </head>
 <body>
 
