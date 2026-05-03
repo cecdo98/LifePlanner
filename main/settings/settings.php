@@ -178,7 +178,7 @@
 
     <!-- Adicionar categoria -->
     <p class="section-label">Adicionar nova categoria</p>
-    <form method="post" action="" class="inline-form">
+    <form method="post" action="" class="inline-form" autocomplete="off">
       <input type="hidden" name="action" value="add_category">
       <input type="text" name="category_name" placeholder="Nome da categoria" maxlength="60" required>
       <button type="submit" class="btn">Adicionar</button>
