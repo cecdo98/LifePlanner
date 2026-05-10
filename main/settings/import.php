@@ -1,11 +1,9 @@
 <?php
     session_start();
     include_once "../../config/bd.php";
+    include_once "../../config/security.php";
 
-    if (!isset($_SESSION['user_id'])) {
-        header("Location: ../../index.php");
-        exit();
-    }
+    require_login("../../index.php");
 
     $user_id = $_SESSION['user_id'];
     $success = '';
@@ -14,23 +12,28 @@
 
     // --- PROCESSAR UPLOAD ---
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['backup_file'])) {
+        verify_csrf_token();
         $file = $_FILES['backup_file'];
 
         if ($file['error'] !== UPLOAD_ERR_OK) {
             $error = 'Erro ao fazer upload do ficheiro.';
 
-        } elseif (pathinfo($file['name'], PATHINFO_EXTENSION) !== 'json') {
+        } elseif (strtolower(pathinfo($file['name'], PATHINFO_EXTENSION)) !== 'json') {
             $error = 'O ficheiro deve ser um .json válido.';
 
         } else {
             $content = file_get_contents($file['tmp_name']);
             $data    = json_decode($content, true);
 
-            if (!$data || !isset($data['categories'], $data['transactions'], $data['monthly_summary'])) {
+            if (!$data || !isset($data['categories'], $data['transactions'], $data['monthly_summary'])
+                || !is_array($data['categories']) || !is_array($data['transactions']) || !is_array($data['monthly_summary'])) {
                 $error = 'Ficheiro JSON inválido ou estrutura não reconhecida.';
 
             } else {
                 $mode = $_POST['mode'] ?? 'merge'; // 'merge' ou 'replace'
+                if (!in_array($mode, ['merge', 'replace'], true)) {
+                    $mode = 'merge';
+                }
 
                 // ── MODO REPLACE: apagar dados existentes do utilizador ──
                 if ($mode === 'replace') {
@@ -39,6 +42,10 @@
                     $stmt->execute();
 
                     $stmt = $conn->prepare("DELETE FROM transactions WHERE user_id = ?");
+                    $stmt->bind_param("i", $user_id);
+                    $stmt->execute();
+
+                    $stmt = $conn->prepare("DELETE FROM category_budgets WHERE user_id = ?");
                     $stmt->bind_param("i", $user_id);
                     $stmt->execute();
 
@@ -56,7 +63,13 @@
                 $catsImported = 0;
 
                 foreach ($data['categories'] as $cat) {
+                    if (!isset($cat['id'], $cat['name'])) {
+                        continue;
+                    }
                     $name = trim($cat['name']);
+                    if ($name === '' || strlen($name) > 60) {
+                        continue;
+                    }
 
                     // Verificar se já existe categoria com esse nome
                     $stmt = $conn->prepare("SELECT id FROM categories WHERE name = ?");
@@ -89,6 +102,10 @@
                 $txSkipped   = 0;
 
                 foreach ($data['transactions'] as $tx) {
+                    if (!isset($tx['amount'], $tx['date'])) {
+                        $txSkipped++;
+                        continue;
+                    }
                     // Mapear category_id para o novo id
                     $old_cat_id = (int)($tx['category_id'] ?? 0);
                     $new_cat_id = $catMap[$old_cat_id] ?? null;
@@ -98,6 +115,11 @@
                     $description = $tx['description'] ?? '';
                     $detail      = $tx['detail'] ?? '';
                     $nif         = (int)($tx['nif'] ?? 0);
+
+                    if ($amount < 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                        $txSkipped++;
+                        continue;
+                    }
 
                     // Em modo merge, evitar duplicados (mesma data + valor + descrição)
                     if ($mode === 'merge') {
@@ -127,11 +149,18 @@
                 $summaryImported = 0;
 
                 foreach ($data['monthly_summary'] as $ms) {
+                    if (!isset($ms['year'], $ms['month'], $ms['total_spent'], $ms['salary'], $ms['final_balance'])) {
+                        continue;
+                    }
                     $year         = (int)$ms['year'];
                     $month        = (int)$ms['month'];
                     $total_spent  = (float)$ms['total_spent'];
                     $salary       = (float)$ms['salary'];
                     $final_balance = (float)$ms['final_balance'];
+
+                    if ($year < 2026 || $year > 2070 || $month < 1 || $month > 12) {
+                        continue;
+                    }
 
                     $stmt = $conn->prepare("
                         INSERT INTO monthly_summary (user_id, year, month, total_spent, salary, final_balance)
@@ -146,11 +175,39 @@
                     $summaryImported++;
                 }
 
+                $budgetsImported = 0;
+                foreach (($data['category_budgets'] ?? []) as $budgetRow) {
+                    if (!isset($budgetRow['category_id'], $budgetRow['year'], $budgetRow['month'], $budgetRow['budget'])) {
+                        continue;
+                    }
+
+                    $old_cat_id = (int)$budgetRow['category_id'];
+                    $new_cat_id = $catMap[$old_cat_id] ?? null;
+                    $budgetYear = (int)$budgetRow['year'];
+                    $budgetMonth = (int)$budgetRow['month'];
+                    $budget = (float)$budgetRow['budget'];
+
+                    if (!$new_cat_id || $budgetYear < 2026 || $budgetYear > 2070 || $budgetMonth < 1 || $budgetMonth > 12 || $budget < 0) {
+                        continue;
+                    }
+
+                    $stmt = $conn->prepare("
+                        INSERT INTO category_budgets (user_id, category_id, year, month, budget)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(user_id, category_id, year, month) DO UPDATE SET
+                            budget = excluded.budget
+                    ");
+                    $stmt->bind_param("iiiid", $user_id, $new_cat_id, $budgetYear, $budgetMonth, $budget);
+                    $stmt->execute();
+                    $budgetsImported++;
+                }
+
                 $stats = [
                     'categories' => $catsImported,
                     'transactions' => $txImported,
                     'transactions_skipped' => $txSkipped,
                     'monthly_summary' => $summaryImported,
+                    'category_budgets' => $budgetsImported,
                     'mode' => $mode,
                 ];
                 $success = 'Importação concluída com sucesso.';
@@ -162,8 +219,10 @@
     $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
     $stmt_cats->execute();
     $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
+    $all_categories = [];
     $res_cats = $stmt_cats->get_result();
     while ($c = $res_cats->fetch_assoc()) {
+        $all_categories[] = $c;
         $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
     }
 ?>
@@ -268,6 +327,24 @@
             transition: border-color 0.12s;
         }
         .export-link:hover { border-color: var(--accent); color: var(--accent); }
+        .export-filter-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        .export-filter-form select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 7px 10px;
+            border-radius: 5px;
+            font-family: var(--font);
+            font-size: 0.84rem;
+            outline: none;
+        }
+        .export-filter-form button { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -276,7 +353,7 @@
   <span class="nav-brand">LifePlanner</span>
   <ul class="nav-links">
     <?php foreach ($navLinks as [$href, $label]): ?>
-    <li><a href="<?= $href ?>"><?= $label ?></a></li>
+    <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
     <?php endforeach; ?>
   </ul>
   <ul class="nav-right">
@@ -291,7 +368,7 @@
     <p class="page-subtitle">Exporta ou importa os teus dados em formato JSON.</p>
 
     <?php if ($success): ?>
-    <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
+    <div class="alert alert-success"><?= e($success) ?></div>
     <?php if ($stats): ?>
     <div class="stats-grid">
         <div class="stat-item">
@@ -310,10 +387,14 @@
             <strong><?= $stats['monthly_summary'] ?></strong>
             Resumos mensais atualizados
         </div>
+        <div class="stat-item">
+            <strong><?= $stats['category_budgets'] ?></strong>
+            Orcamentos importados
+        </div>
     </div>
     <?php endif; ?>
     <?php elseif ($error): ?>
-    <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
+    <div class="alert alert-error"><?= e($error) ?></div>
     <?php endif; ?>
 
     <!-- Exportar -->
@@ -325,12 +406,37 @@
         <a href="export.php" class="export-link">
             ⬇ Download backup JSON
         </a>
+        <form action="export.php" method="get" class="export-filter-form">
+            <select name="year">
+                <option value="">Todos os anos</option>
+                <?php for ($y = 2026; $y <= 2070; $y++): ?>
+                <option value="<?= $y ?>"><?= $y ?></option>
+                <?php endfor; ?>
+            </select>
+            <select name="month">
+                <option value="">Todos os meses</option>
+                <?php
+                $monthsExport = [1=>'Janeiro',2=>'Fevereiro',3=>'Marco',4=>'Abril',5=>'Maio',6=>'Junho',7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro'];
+                foreach ($monthsExport as $num => $name):
+                ?>
+                <option value="<?= $num ?>"><?= e($name) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <select name="category_id">
+                <option value="">Todas as categorias</option>
+                <?php foreach ($all_categories as $cat): ?>
+                <option value="<?= $cat['id'] ?>"><?= e($cat['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="export-link">Download filtrado</button>
+        </form>
     </div>
 
     <!-- Importar -->
     <div class="card">
         <div class="card-title">Importar</div>
         <form method="post" enctype="multipart/form-data" id="importForm">
+            <?= csrf_field() ?>
 
             <!-- Modo -->
             <p class="section-label" style="margin-bottom:10px;">Modo de importação</p>

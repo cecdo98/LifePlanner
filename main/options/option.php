@@ -1,46 +1,52 @@
 <?php
   session_start();
   include_once "../../config/bd.php";
+  include_once "../../config/security.php";
 
-  if (!isset($_SESSION['user_id'])) {
-      header("Location: ../../index.php");
-      exit();
-  }
+  require_login("../../index.php");
 
-  $category_id = isset($_GET['cat'])  ? intval($_GET['cat'])  : 1;
-  $year        = isset($_GET['year']) ? intval($_GET['year']) : (int)date('Y');
+  $category_id = isset($_GET['cat']) ? max(1, intval($_GET['cat'])) : 1;
+  $year        = validate_year($_GET['year'] ?? null);
   $user_id     = $_SESSION['user_id'];
-
-  // --- APAGAR ---
-  if (isset($_GET['delete_id'])) {
-      $id_to_delete = intval($_GET['delete_id']);
-      $stmt = $conn->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
-      $stmt->bind_param("ii", $id_to_delete, $user_id);
-      $stmt->execute();
-      header("Location: option.php?cat=" . $category_id . "&year=" . $year);
-      exit();
-  }
+  $search      = trim($_GET['q'] ?? '');
+  $success     = flash_message($_GET['msg'] ?? '');
 
   // --- INSERIR / EDITAR ---
   if ($_SERVER["REQUEST_METHOD"] === "POST") {
-      $category_id = isset($_POST['category_id']) ? intval($_POST['category_id']) : 1;
-      $amount      = $_POST["amount"];
-      $date        = $_POST["date"];
-      $description = $_POST["description"];
-      $detail      = $_POST["detail"];
-      $nif         = $_POST["nif"];
-      $cat_to_save = (int)$_POST["category_id"];
+      verify_csrf_token();
+
+      if (($_POST['action'] ?? '') === 'delete_transaction') {
+          $id_to_delete = intval($_POST['delete_id'] ?? 0);
+          $stmt = $conn->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
+          $stmt->bind_param("ii", $id_to_delete, $user_id);
+          $stmt->execute();
+          header("Location: option.php?cat=" . $category_id . "&year=" . $year . "&msg=expense_deleted");
+          exit();
+      }
+
+      $category_id = isset($_POST['category_id']) ? max(1, intval($_POST['category_id'])) : 1;
+      $amount      = filter_var($_POST["amount"] ?? null, FILTER_VALIDATE_FLOAT);
+      $date        = $_POST["date"] ?? '';
+      $description = trim($_POST["description"] ?? '');
+      $detail      = trim($_POST["detail"] ?? '');
+      $nif         = (int)validate_nif($_POST["nif"] ?? '0', '0');
+      $cat_to_save = $category_id;
+
+      if ($amount === false || $amount < 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $description === '') {
+          header("Location: option.php?cat=" . $category_id . "&year=" . $year);
+          exit();
+      }
 
       if (!empty($_POST['edit_id'])) {
           $edit_id = intval($_POST['edit_id']);
           $stmt = $conn->prepare("UPDATE transactions SET category_id=?, amount=?, date=?, description=?, detail=?, nif=? WHERE id=? AND user_id=?");
-          $stmt->bind_param("isssssii",$category_id, $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
+          $stmt->bind_param("idsssiii", $category_id, $amount, $date, $description, $detail, $nif, $edit_id, $user_id);
       } else {
           $stmt = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?, ?, ?, ?, ?, ?, ?)");
-          $stmt->bind_param("iissssi", $user_id, $cat_to_save, $amount, $date, $description, $detail, $nif);
+          $stmt->bind_param("iidsssi", $user_id, $cat_to_save, $amount, $date, $description, $detail, $nif);
       }
       $stmt->execute();
-      header("Location: option.php?cat=" . $cat_to_save . "&year=" . $year);
+      header("Location: option.php?cat=" . $cat_to_save . "&year=" . $year . "&msg=expense_saved");
       exit();
   }
 
@@ -137,7 +143,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?= htmlspecialchars($nome_categoria) ?> — LifePlanner</title>
+  <title><?= e($nome_categoria) ?> — LifePlanner</title>
   <link rel="stylesheet" href="./stylesOption.css">
   <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico">
 </head>
@@ -151,7 +157,7 @@
       $isActive = (strpos($href, 'cat=') !== false && $catNum === $category_id)
                || (strpos($href, 'dashboard') !== false && false);
     ?>
-    <li><a href="<?= $href ?>" <?= $isActive ? 'class="active"' : '' ?>><?= $label ?></a></li>
+    <li><a href="<?= e($href) ?>" <?= $isActive ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
     <?php endforeach; ?>
   </ul>
   <ul class="nav-right">
@@ -162,7 +168,11 @@
 
 <div class="page">
 
-  <h1 class="page-title"><?= htmlspecialchars($nome_categoria) ?></h1>
+  <h1 class="page-title"><?= e($nome_categoria) ?></h1>
+
+  <?php if ($success): ?>
+  <div class="alert alert-success"><?= e($success) ?></div>
+  <?php endif; ?>
 
   <!-- KPIs -->
   <div class="kpi-row">
@@ -179,7 +189,8 @@
   <!-- Formulario -->
   <div class="card">
     <div class="card-title"><?= $edit_data ? 'Editar Despesa' : 'Nova Despesa' ?></div>
-    <form action="option.php?cat=<?= $category_id ?>" method="post">
+    <form action="option.php?cat=<?= $category_id ?>&year=<?= $year ?>" method="post">
+      <?= csrf_field() ?>
       <input type="hidden" name="category_id" value="<?= $category_id ?>">
       <input type="hidden" name="edit_id"     value="<?= $edit_data['id'] ?? '' ?>">
 
@@ -188,7 +199,7 @@
         <select name="category_id" required>
           <?php foreach ($all_categories as $cat): ?>
           <option value="<?= $cat['id'] ?>" <?= ($category_id == $cat['id']) ? 'selected' : '' ?>>
-            <?= htmlspecialchars($cat['name']) ?>
+            <?= e($cat['name']) ?>
           </option>
           <?php endforeach; ?>
         </select>
@@ -196,17 +207,17 @@
 
         <label for="amount">Valor (€)</label>
         <input type="number" id="amount" name="amount" step="0.01" min="0"
-               value="<?= htmlspecialchars($edit_data['amount'] ?? '') ?>" required>
+               value="<?= e($edit_data['amount'] ?? '') ?>" required>
 
         <label for="date">Data</label>
         <input type="date" id="date" name="date"
-               value="<?= htmlspecialchars($edit_data['date'] ?? date('Y-m-d')) ?>" required>
+               value="<?= e($edit_data['date'] ?? date('Y-m-d')) ?>" required>
 
         <label for="description">Descrição</label>
-        <textarea id="description" name="description" required><?= htmlspecialchars($edit_data['description'] ?? '') ?></textarea>
+        <textarea id="description" name="description" required><?= e($edit_data['description'] ?? '') ?></textarea>
 
         <label for="detail">Detalhes</label>
-        <textarea id="detail" name="detail"><?= htmlspecialchars($edit_data['detail'] ?? '') ?></textarea>
+        <textarea id="detail" name="detail"><?= e($edit_data['detail'] ?? '') ?></textarea>
 
         <label>NIF</label>
         <div class="radio-group">
@@ -258,6 +269,7 @@
       <span>Historico de Despesas — <?= $year ?></span>
       <form method="get" action="" style="display:flex; gap:8px; align-items:center; margin:0;">
         <input type="hidden" name="cat" value="<?= $category_id ?>">
+        <input type="text" name="q" value="<?= e($search) ?>" placeholder="Pesquisar" class="table-search">
         <select name="year" onchange="this.form.submit()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-family:var(--font);font-size:0.8rem;outline:none;cursor:pointer;">
           <?php for ($y = (int)date('Y'); $y >= 2026; $y--): ?>
           <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?></option>
@@ -266,8 +278,20 @@
       </form>
     </div>
     <?php
-    $stmt = $conn->prepare("SELECT id, amount, date, description, detail, nif FROM transactions WHERE category_id = ? AND user_id = ? AND YEAR(date) = ? ORDER BY date DESC");
-    $stmt->bind_param("iii", $category_id, $user_id, $year);
+    if ($search !== '') {
+        $like = '%' . $search . '%';
+        $stmt = $conn->prepare("
+            SELECT id, amount, date, description, detail, nif
+            FROM transactions
+            WHERE category_id = ? AND user_id = ? AND YEAR(date) = ?
+              AND (description LIKE ? OR detail LIKE ? OR date LIKE ? OR CAST(amount AS TEXT) LIKE ?)
+            ORDER BY date DESC
+        ");
+        $stmt->bind_param("iiissss", $category_id, $user_id, $year, $like, $like, $like, $like);
+    } else {
+        $stmt = $conn->prepare("SELECT id, amount, date, description, detail, nif FROM transactions WHERE category_id = ? AND user_id = ? AND YEAR(date) = ? ORDER BY date DESC");
+        $stmt->bind_param("iii", $category_id, $user_id, $year);
+    }
     $stmt->execute();
     $result = $stmt->get_result();
     ?>
@@ -291,22 +315,25 @@
           <td class="amount"><?= number_format($row['amount'], 2, ',', '.') ?> €</td>
           <td style="white-space:nowrap"><?= date('d/m/Y', strtotime($row['date'])) ?></td>
           <td>
-            <?= htmlspecialchars($row['description']) ?>
+            <?= e($row['description']) ?>
           </td>
           <td>
-            <?= htmlspecialchars($row['detail']) ?>
+            <?= e($row['detail']) ?>
           </td>
           <td>
-              <?= htmlspecialchars($row['nif']) == 1 ? 'Sim' : 'Nao' ?>
+              <?= e($row['nif']) == 1 ? 'Sim' : 'Nao' ?>
           </td>
           <td style="white-space:nowrap">
             <a class="action-link action-edit"
                href="option.php?cat=<?= $category_id ?>&edit_id=<?= $row['id'] ?>&year=<?= $year ?>">Editar
             </a>
-            <a class="action-link action-delete"
-               href="option.php?cat=<?= $category_id ?>&delete_id=<?= $row['id'] ?>&year=<?= $year ?>"
-               onclick="return confirm('Tem a certeza que quer apagar este registo?')">Apagar
-            </a>
+            <form method="post" action="option.php?cat=<?= $category_id ?>&year=<?= $year ?>" style="display:inline;">
+              <?= csrf_field() ?>
+              <input type="hidden" name="action" value="delete_transaction">
+              <input type="hidden" name="delete_id" value="<?= $row['id'] ?>">
+              <button type="submit" class="action-link action-delete" style="background:none;border:0;padding:0;font:inherit;cursor:pointer;"
+                 onclick="return confirm('Tem a certeza que quer apagar este registo?')">Apagar</button>
+            </form>
           </td>
         </tr>
         <?php endwhile; ?>

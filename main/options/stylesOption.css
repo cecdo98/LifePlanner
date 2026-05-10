@@ -251,6 +251,26 @@
   .action-delete:hover { background: #fef2f2; }
   .text-muted { color: var(--muted); font-size: 0.8rem; }
   .detail-text { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+  .alert {
+    padding: 10px 14px;
+    border-radius: 5px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  .table-search {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 0.8rem;
+    outline: none;
+    width: 170px;
+  }
+  .table-search:focus { border-color: var(--accent); }
 
   @media (max-width: 700px) {
     nav { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 6px; }

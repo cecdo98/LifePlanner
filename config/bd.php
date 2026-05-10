@@ -1,4 +1,8 @@
 <?php
+    if (!defined('MYSQLI_ASSOC')) {
+        define('MYSQLI_ASSOC', 1);
+    }
+
     class MockMysqliStmt {
         private $pdoStmt;
         private $params = [];
@@ -119,11 +123,30 @@
     }
 
     // Inicia a conexão
+    if (!file_exists($dbFinal)) {
+        die("Base de dados nao encontrada em: $dbFinal");
+    }
+
     $conn = new MockMysqli($dbFinal);
 
     if ($conn->connect_error) {
         die("Falha na ligação: " . $conn->connect_error . " (Ficheiro não encontrado em: $dbFinal)");
     }
 
+
+    $stmtInit = $conn->prepare("
+        CREATE TABLE IF NOT EXISTS category_budgets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            category_id INTEGER NOT NULL,
+            year INTEGER NOT NULL,
+            month INTEGER NOT NULL,
+            budget REAL NOT NULL DEFAULT 0,
+            UNIQUE(user_id, category_id, year, month)
+        )
+    ");
+    if ($stmtInit) {
+        $stmtInit->execute();
+    }
 
 ?>

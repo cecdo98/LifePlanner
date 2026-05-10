@@ -156,7 +156,7 @@ nav {
 /* KPI row */
 .kpi-row {
 display: grid;
-grid-template-columns: repeat(3, 1fr);
+grid-template-columns: repeat(4, 1fr);
 gap: 14px;
 margin-bottom: 20px;
 }
@@ -182,6 +182,7 @@ margin-bottom: 6px;
 .kpi-card.red   .kpi-value { color: var(--danger); }
 .kpi-card.blue  .kpi-value { color: var(--accent); }
 .kpi-card.green .kpi-value { color: var(--green); }
+.kpi-note { font-size: 0.76rem; color: var(--muted); margin-top: 5px; }
 
 /* Main grid */
 .main-grid {
@@ -232,6 +233,27 @@ border-bottom: 1px solid var(--border);
 .data-table .cat-name { font-weight: 500; }
 .data-table .amount-zero { color: var(--muted); }
 .data-table .amount-pos  { color: var(--danger); font-weight: 600; }
+.status-ok,
+.status-danger,
+.status-muted {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+}
+.status-ok { background: #dcfce7; color: #15803d; }
+.status-danger { background: #fef2f2; color: var(--danger); }
+.status-muted { background: #f1f5f9; color: var(--muted); }
+.alert {
+    padding: 10px 14px;
+    border-radius: 5px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    margin-bottom: 16px;
+}
+.alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.text-muted { color: var(--muted); font-size: 0.84rem; }
 
 /* Salary panel */
 .salary-panel { margin-bottom: 14px; }

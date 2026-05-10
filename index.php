@@ -1,11 +1,13 @@
 <?php
   session_start();
   include_once "./config/bd.php";
+  include_once "./config/security.php";
 
   $usernameErr = $passwordErr = $loginErr = "";
   $username = "";
 
   if ($_SERVER["REQUEST_METHOD"] === "POST") {
+      verify_csrf_token();
 
       if (empty($_POST["username"])) {
           $usernameErr = "Username obrigatorio.";
@@ -64,21 +66,22 @@
   <div class="card">
     <div class="card-title" style="text-align:center">Iniciar sessão</div>
 
-    <form method="post" action="<?= htmlspecialchars($_SERVER["PHP_SELF"]) ?>" autocomplete="off">
+    <form method="post" action="<?= e($_SERVER["PHP_SELF"]) ?>" autocomplete="off">
+      <?= csrf_field() ?>
       <div class="form-stack">
 
         <?php if ($loginErr): ?>
-        <div class="alert-error"><?= htmlspecialchars($loginErr) ?></div>
+        <div class="alert-error"><?= e($loginErr) ?></div>
         <?php endif; ?>
 
         <div class="form-field">
           <label for="username">Username</label>
           <input type="text" id="username" name="username"
-                 value="<?= htmlspecialchars($username) ?>"
+                 value="<?= e($username) ?>"
                  class="<?= $usernameErr ? 'has-error' : '' ?>"
                  autocomplete="username">
           <?php if ($usernameErr): ?>
-          <span class="field-error"><?= htmlspecialchars($usernameErr) ?></span>
+          <span class="field-error"><?= e($usernameErr) ?></span>
           <?php endif; ?>
         </div>
 
@@ -88,7 +91,7 @@
                  class="<?= $passwordErr ? 'has-error' : '' ?>"
                  autocomplete="current-password">
           <?php if ($passwordErr): ?>
-          <span class="field-error"><?= htmlspecialchars($passwordErr) ?></span>
+          <span class="field-error"><?= e($passwordErr) ?></span>
           <?php endif; ?>
         </div>
 

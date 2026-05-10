@@ -269,3 +269,16 @@
     nav  { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 6px; }
     .page { padding: 14px; }
   }
+  .delete-cat-row input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 11px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 0.87rem;
+    outline: none;
+    transition: border-color 0.12s;
+    width: 220px;
+  }
+  .delete-cat-row input[type="text"]:focus { border-color: var(--accent); }

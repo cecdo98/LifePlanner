@@ -1,18 +1,22 @@
 <?php
     session_start();
     include_once "./bd.php";
+    include_once "./security.php";
 
     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
   
-        if (!isset($_SESSION['user_id'])) {
-            header("Location: ../../index.php");
-            exit();
-        }
+        require_login("../index.php");
+        verify_csrf_token();
 
         $user_id = $_SESSION['user_id'];
-        $year    = (int)$_POST['year'];
-        $month   = (int)$_POST['month'];
-        $salary  = (float)$_POST['salary'];
+        $year    = validate_year($_POST['year'] ?? null);
+        $month   = validate_month($_POST['month'] ?? null);
+        $salary  = filter_var($_POST['salary'] ?? null, FILTER_VALIDATE_FLOAT);
+
+        if ($salary === false || $salary < 0) {
+            header("Location: ../main/dashboard/dashboard.php?year=$year&month=$month&msg=salary_saved");
+            exit();
+        }
 
         // 1. Calcular o total gasto atual para garantir que o saldo final fica correto na BD
         $stmtGasto = $conn->prepare("SELECT SUM(amount) as total FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ?");
