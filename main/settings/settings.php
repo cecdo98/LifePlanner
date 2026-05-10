@@ -309,6 +309,6 @@
     <a href="../../config/logout.php" class="btn btn-danger">Terminar sessao</a>
   </div>
 
-</div><!-- /page -->
+</div>
 </body>
 </html>
