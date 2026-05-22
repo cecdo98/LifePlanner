@@ -73,7 +73,6 @@
         
         public function __construct($dbFile) {
             try {
-                // Mudança: Agora usa o caminho completo passado por argumento
                 $this->pdo = new PDO("sqlite:" . $dbFile);
                 $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $this->pdo->setAttribute(PDO::ATTR_CASE, PDO::CASE_LOWER);
@@ -110,8 +109,6 @@
     // PC 2 Desktop
     $caminhoPC2 = "C:\Users\Carlos\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
 
-    // Fallback (Se não encontrar nenhum, procura na pasta do script)
-    $caminhoLocal = __DIR__ . "/financas.sqlite";
 
     // Lógica para decidir qual ficheiro usar
     if (file_exists($caminhoPC1)) {
@@ -119,7 +116,7 @@
     } elseif (file_exists($caminhoPC2)) {
         $dbFinal = $caminhoPC2;
     } else {
-        $dbFinal = $caminhoLocal;
+        die("Nenhum ficheiro de base de dados encontrado.");
     }
 
     // Inicia a conexão
