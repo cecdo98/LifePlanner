@@ -63,6 +63,14 @@
             'category_added' => 'Categoria adicionada com sucesso.',
             'category_renamed' => 'Categoria renomeada com sucesso.',
             'category_deleted' => 'Categoria removida e despesas movidas com sucesso.',
+            'goal_saved' => 'Meta de poupanca guardada com sucesso.',
+            'goal_updated' => 'Meta de poupanca atualizada com sucesso.',
+            'goal_deleted' => 'Meta de poupanca removida.',
+            'recurring_saved' => 'Despesa recorrente guardada com sucesso.',
+            'recurring_deleted' => 'Despesa recorrente removida.',
+            'recurring_applied' => 'Despesas recorrentes aplicadas com sucesso.',
+            'tag_saved' => 'Etiqueta criada com sucesso.',
+            'tag_deleted' => 'Etiqueta removida.',
         ];
 
         return $messages[$key] ?? '';

@@ -345,15 +345,21 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links">
+  <ul class="nav-links" id="nav-links">
     <?php foreach ($navLinks as [$href, $label]): ?>
     <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
     <?php endforeach; ?>
   </ul>
-  <ul class="nav-right">
-    <li><a href="../settings/settings.php">Definições</a></li>
-    <li><a href="../../config/logout.php" class="btn-danger">Sair</a></li>
-  </ul>
+  <div class="nav-controls">
+    <ul class="nav-right">
+      <li><a href="../settings/settings.php" class="active">Definições</a></li>
+      <li><a href="../../config/logout.php" class="btn-danger">Sair</a></li>
+    </ul>
+    <button id="theme-toggle" class="nav-icon-btn" title="Mudar tema"></button>
+    <button id="nav-hamburger" class="nav-icon-btn" title="Menu" aria-expanded="false">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+    </button>
+  </div>
 </nav>
 
 <div class="page">

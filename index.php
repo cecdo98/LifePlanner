@@ -54,8 +54,11 @@
   <title>LifePlanner — Login</title>
   <link rel="stylesheet" href="./stylesLogin.css">
   <link rel="icon" type="image/x-icon" href="./assets/favicon.ico">
+  <script src="./assets/global.js"></script>
 </head>
 <body>
+
+<button id="theme-toggle" class="login-theme-toggle" title="Mudar tema"></button>
 
 <div class="login-wrap">
   <div class="brand">
