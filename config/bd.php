@@ -3,11 +3,13 @@
         define('MYSQLI_ASSOC', 1);
     }
 
+    include_once __DIR__ . "/migrations.php";
+
     class MockMysqliStmt {
         private $pdoStmt;
         private $params = [];
-        private $result;
-        
+        private $result = [];
+
         public function __construct($pdoStmt) {
             $this->pdoStmt = $pdoStmt;
         }
@@ -28,8 +30,9 @@
                 }
                 $this->pdoStmt->bindValue($k + 1, $v, $type);
             }
+
             $res = $this->pdoStmt->execute();
-            if ($res && preg_match('/^\s*SELECT/i', $this->pdoStmt->queryString)) {
+            if ($res && preg_match('/^\s*(SELECT|PRAGMA)/i', $this->pdoStmt->queryString)) {
                 $this->result = $this->pdoStmt->fetchAll(PDO::FETCH_ASSOC);
             }
             return $res;
@@ -70,13 +73,12 @@
         private $pdo;
         public $connect_error = null;
         public $error = null;
-        
+
         public function __construct($dbFile) {
             try {
                 $this->pdo = new PDO("sqlite:" . $dbFile);
                 $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
                 $this->pdo->setAttribute(PDO::ATTR_CASE, PDO::CASE_LOWER);
-                
                 $this->pdo->sqliteCreateFunction('YEAR', function($date) {
                     return (int)date('Y', strtotime($date));
                 }, 1);
@@ -99,51 +101,33 @@
         }
     }
 
-    // ==========================================
-    // CONFIGURAÇÃO DE CAMINHOS (ONEDRIVE)
-    // ==========================================
+    $localConfigFile = __DIR__ . "/local.php";
+    $localConfig = file_exists($localConfigFile) ? include $localConfigFile : [];
 
-    // PC 1 Portátil
-    $caminhoPC1 = "C:\Users\carlo\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
+    $candidatePaths = [];
+    if (!empty($localConfig['db_path'])) {
+        $candidatePaths[] = $localConfig['db_path'];
+    }
+    $candidatePaths[] = "C:\Users\carlo\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
+    $candidatePaths[] = "C:\Users\Carlos\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
+    $candidatePaths[] = __DIR__ . "/financas.sqlite";
 
-    // PC 2 Desktop
-    $caminhoPC2 = "C:\Users\Carlos\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
-
-
-    // Lógica para decidir qual ficheiro usar
-    if (file_exists($caminhoPC1)) {
-        $dbFinal = $caminhoPC1;
-    } elseif (file_exists($caminhoPC2)) {
-        $dbFinal = $caminhoPC2;
-    } else {
-        die("Nenhum ficheiro de base de dados encontrado.");
+    $dbFinal = null;
+    foreach ($candidatePaths as $path) {
+        if (file_exists($path)) {
+            $dbFinal = $path;
+            break;
+        }
     }
 
-    // Inicia a conexão
-    if (!file_exists($dbFinal)) {
-        die("Base de dados nao encontrada em: $dbFinal");
+    if (!$dbFinal) {
+        die("Nenhum ficheiro de base de dados encontrado. Cria config/local.php a partir de config/local.example.php.");
     }
 
     $conn = new MockMysqli($dbFinal);
-
     if ($conn->connect_error) {
-        die("Falha na ligação: " . $conn->connect_error . " (Ficheiro não encontrado em: $dbFinal)");
+        die("Falha na ligacao: " . $conn->connect_error . " (Ficheiro: $dbFinal)");
     }
 
-
-    $stmtInit = $conn->prepare("
-        CREATE TABLE IF NOT EXISTS category_budgets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            category_id INTEGER NOT NULL,
-            year INTEGER NOT NULL,
-            month INTEGER NOT NULL,
-            budget REAL NOT NULL DEFAULT 0,
-            UNIQUE(user_id, category_id, year, month)
-        )
-    ");
-    if ($stmtInit) {
-        $stmtInit->execute();
-    }
-
+    run_migrations($conn);
 ?>

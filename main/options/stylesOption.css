@@ -271,6 +271,25 @@
     width: 170px;
   }
   .table-search:focus { border-color: var(--accent); }
+  .movement-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .movement-filters input,
+  .movement-filters select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-family: var(--font);
+    font-size: 0.84rem;
+    outline: none;
+  }
+  .movement-filters input:focus,
+  .movement-filters select:focus { border-color: var(--accent); }
 
   @media (max-width: 700px) {
     nav { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 6px; }

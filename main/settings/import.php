@@ -2,6 +2,7 @@
     session_start();
     include_once "../../config/bd.php";
     include_once "../../config/security.php";
+    include_once "../../config/repository.php";
 
     require_login("../../index.php");
 
@@ -216,15 +217,8 @@
     }
 
     // NavLinks dinâmicos
-    $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
-    $stmt_cats->execute();
-    $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
-    $all_categories = [];
-    $res_cats = $stmt_cats->get_result();
-    while ($c = $res_cats->fetch_assoc()) {
-        $all_categories[] = $c;
-        $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
-    }
+    $all_categories = get_categories($conn);
+    $navLinks = build_nav_links($all_categories);
 ?>
 <!DOCTYPE html>
 <html lang="pt">

@@ -2,6 +2,7 @@
   session_start();
   include_once "../../config/bd.php";
   include_once "../../config/security.php";
+  include_once "../../config/repository.php";
 
   require_login("../../index.php");
 
@@ -17,6 +18,10 @@
 
       if (($_POST['action'] ?? '') === 'delete_transaction') {
           $id_to_delete = intval($_POST['delete_id'] ?? 0);
+          if ($id_to_delete <= 0) {
+              header("Location: option.php?cat=" . $category_id . "&year=" . $year);
+              exit();
+          }
           $stmt = $conn->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
           $stmt->bind_param("ii", $id_to_delete, $user_id);
           $stmt->execute();
@@ -32,7 +37,9 @@
       $nif         = (int)validate_nif($_POST["nif"] ?? '0', '0');
       $cat_to_save = $category_id;
 
-      if ($amount === false || $amount < 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || $description === '') {
+      if ($amount === false || $amount < 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
+          || $description === '' || strlen($description) > 255 || strlen($detail) > 1000
+          || !category_exists($conn, $category_id)) {
           header("Location: option.php?cat=" . $category_id . "&year=" . $year);
           exit();
       }
@@ -62,9 +69,7 @@
   }
 
   //-- CATEGORIAS ---
-  $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
-  $stmt_cats->execute();
-  $all_categories = $stmt_cats->get_result()->fetch_all(MYSQLI_ASSOC);
+  $all_categories = get_categories($conn);
 
   // --- NOME DA CATEGORIA ---
   $stmt_cat = $conn->prepare("SELECT name FROM categories WHERE id = ?");
@@ -133,10 +138,7 @@
       return '#dc2626';
   }, $chartDeltas));
 
-  $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
-  foreach ($all_categories as $c) {
-      $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
-  }
+  $navLinks = build_nav_links($all_categories);
 ?>
 <!DOCTYPE html>
 <html lang="pt">

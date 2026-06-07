@@ -2,6 +2,7 @@
     session_start();
     include_once "../../config/bd.php";
     include_once "../../config/security.php";
+    include_once "../../config/repository.php";
 
     require_login("../../index.php");
 
@@ -19,33 +20,6 @@
         1=>"Janeiro",2=>"Fevereiro",3=>"Marco",4=>"Abril",5=>"Maio",6=>"Junho",
         7=>"Julho",8=>"Agosto",9=>"Setembro",10=>"Outubro",11=>"Novembro",12=>"Dezembro"
     ];
-
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_budgets') {
-        verify_csrf_token();
-        $budgetYear = validate_year($_POST['year'] ?? $year);
-        $budgetMonth = validate_month($_POST['month'] ?? $month);
-        $budgets = $_POST['budgets'] ?? [];
-
-        foreach ($budgets as $catId => $budgetValue) {
-            $catId = (int)$catId;
-            $budget = filter_var($budgetValue, FILTER_VALIDATE_FLOAT);
-            if ($catId <= 0 || $budget === false || $budget < 0) {
-                continue;
-            }
-
-            $stmtBudget = $conn->prepare("
-                INSERT INTO category_budgets (user_id, category_id, year, month, budget)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(user_id, category_id, year, month) DO UPDATE SET
-                    budget = excluded.budget
-            ");
-            $stmtBudget->bind_param("iiiid", $user_id, $catId, $budgetYear, $budgetMonth, $budget);
-            $stmtBudget->execute();
-        }
-
-        header("Location: dashboard.php?year=$budgetYear&month=$budgetMonth&nif=$nif&msg=budget_saved");
-        exit();
-    }
 
     $stmtSalary = $conn->prepare("SELECT salary FROM monthly_summary WHERE user_id = ? AND year = ? AND month = ?");
     $stmtSalary->bind_param("iii", $user_id, $year, $month);
@@ -179,13 +153,8 @@
         $jsSpent[] = $spentAnual[$m] !== null ? $spentAnual[$m] : 'null';
     }
 
-    $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
-    $stmt_cats->execute();
-    $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
-    $res_cats = $stmt_cats->get_result();
-    while ($c = $res_cats->fetch_assoc()) {
-        $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
-    }
+    $all_categories = get_categories($conn);
+    $navLinks = build_nav_links($all_categories);
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -328,27 +297,6 @@
         </form>
       </div>
 
-      <div class="card salary-panel" style="margin-bottom:16px;">
-        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleBudgets()">
-          Orcamentos
-          <span id="budget-icon">+</span> 
-        </div>
-        
-        <div id="budget-content" style="display: none;">
-          <form action="dashboard.php?year=<?= $year ?>&month=<?= $month ?>&nif=<?= e($nif) ?>" method="post">
-            <input type="hidden" name="action" value="save_budgets">
-            <input type="hidden" name="year" value="<?= $year ?>">
-            <input type="hidden" name="month" value="<?= $month ?>">
-            <?= csrf_field() ?>
-            <?php foreach ($categoryRows as $row): ?>
-            <label><?= e($row['categoria']) ?></label>
-            <input type="number" step="0.01" min="0" name="budgets[<?= (int)$row['id'] ?>]" value="<?= e($row['budget']) ?>">
-            <?php endforeach; ?>
-            <button type="submit" class="btn" style="width:100%">Guardar</button>
-          </form>
-        </div>
-      </div>
-
       <div class="card">
         <div class="card-title">Distribuicao - <?= e($mesesFull[$month]) ?></div>
         <canvas id="pieChart" height="240"></canvas>
@@ -359,7 +307,7 @@
   <div class="card">
     <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleLatest()">
         Ultimos Movimentos
-        <span id="budget-icon">+</span> 
+        <span id="latest-icon">+</span>
       </div>
       <div id="latest-content" style="display: none;">
         <?php if (empty($latestTransactions)): ?>
@@ -486,19 +434,6 @@
       scales: baseScales()
     }
   });
-
-  function toggleBudgets() {
-    const content = document.getElementById('budget-content');
-    const icon = document.getElementById('budget-icon');
-    
-    if (content.style.display === "none") {
-      content.style.display = "block";
-      icon.innerText = "−"; 
-    } else {
-      content.style.display = "none";
-      icon.innerText = "+"; 
-    }
-  }
 
   function toggleLatest() {
     const content = document.getElementById('latest-content');

@@ -2,6 +2,7 @@
   session_start();
   include_once "../../config/bd.php";
   include_once "../../config/security.php";
+  include_once "../../config/repository.php";
 
   require_login("../../index.php");
 
@@ -56,7 +57,7 @@
                   $stmt = $conn->prepare("INSERT INTO categories (name) VALUES (?)");
                   $stmt->bind_param("s", $name);
                   $stmt->execute();
-                  $success = "Categoria \"$name\" adicionada com sucesso.";
+                  $success = flash_message('category_added');
               }
           }
       }
@@ -66,7 +67,7 @@
           $cat_id = intval($_POST['cat_id'] ?? 0);
           $name = trim($_POST['category_name'] ?? '');
 
-          if ($cat_id <= 0) {
+          if ($cat_id <= 0 || !category_exists($conn, $cat_id)) {
               $error = 'Categoria invalida.';
           } elseif ($name === '') {
               $error = 'O nome da categoria nao pode estar vazio.';
@@ -96,7 +97,7 @@
 
           if ($cat_id === $move_to_id) {
               $error = 'Tens de escolher uma categoria diferente para mover as despesas.';
-          } elseif ($cat_id <= 0 || $move_to_id <= 0) {
+          } elseif ($cat_id <= 0 || $move_to_id <= 0 || !category_exists($conn, $cat_id) || !category_exists($conn, $move_to_id)) {
               $error = 'Categoria inválida.';
           } else {
               $stmt = $conn->prepare("UPDATE transactions SET category_id = ? WHERE category_id = ? AND user_id = ?");
@@ -118,16 +119,31 @@
               }
           }
       }
+
+      // --- GUARDAR ORCAMENTOS ---
+      if ($_POST['action'] === 'save_budgets') {
+          $budgetYear = validate_year($_POST['year'] ?? null);
+          $budgetMonth = validate_month($_POST['month'] ?? null);
+          $budgets = $_POST['budgets'] ?? [];
+
+          foreach ($budgets as $catId => $budgetValue) {
+              $catId = (int)$catId;
+              $budget = filter_var($budgetValue, FILTER_VALIDATE_FLOAT);
+              if ($catId <= 0 || $budget === false || $budget < 0 || !category_exists($conn, $catId)) {
+                  continue;
+              }
+              save_monthly_budget($conn, $user_id, $catId, $budgetYear, $budgetMonth, $budget);
+          }
+
+          $success = flash_message('budget_saved');
+      }
   }
 
   // --- BUSCAR TODAS AS CATEGORIAS ---
-  $stmt_cats = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
-  $stmt_cats->execute();
-  $all_categories = [];
-  $res_cats = $stmt_cats->get_result();
-  while ($c = $res_cats->fetch_assoc()) {
-      $all_categories[] = $c;
-  }
+  $all_categories = get_categories($conn);
+  $budget_year = validate_year($_GET['budget_year'] ?? date('Y'));
+  $budget_month = validate_month($_GET['budget_month'] ?? date('m'));
+  $budget_rows = get_monthly_budget_rows($conn, $user_id, $budget_year, $budget_month);
 
   $category_counts = [];
   $stmt_counts = $conn->prepare("SELECT category_id, COUNT(*) AS total FROM transactions WHERE user_id = ? GROUP BY category_id");
@@ -145,10 +161,7 @@
   $user = $stmt->get_result()->fetch_assoc();
 
   // --- NAVLINKS DINÂMICOS ---
-  $navLinks = [["../dashboard/dashboard.php", "Inicio"]];
-  foreach ($all_categories as $c) {
-      $navLinks[] = ["../options/option.php?cat=" . $c['id'], $c['name']];
-  }
+  $navLinks = build_nav_links($all_categories);
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -285,6 +298,44 @@
       <?php endforeach; ?>
     </div>
     <?php endif; ?>
+  </div>
+
+  <!-- Orcamentos -->
+  <div class="card">
+    <div class="card-title">Orcamentos Mensais</div>
+
+    <form method="get" action="" class="delete-cat-form" style="margin-bottom:16px;">
+      <div class="delete-cat-row">
+        <select name="budget_year">
+          <?php for ($y = 2026; $y <= 2070; $y++): ?>
+          <option value="<?= $y ?>" <?= $y === $budget_year ? 'selected' : '' ?>><?= $y ?></option>
+          <?php endfor; ?>
+        </select>
+        <select name="budget_month">
+          <?php
+            $months = [1=>'Janeiro',2=>'Fevereiro',3=>'Marco',4=>'Abril',5=>'Maio',6=>'Junho',7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro'];
+            foreach ($months as $num => $name):
+          ?>
+          <option value="<?= $num ?>" <?= $num === $budget_month ? 'selected' : '' ?>><?= e($name) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn">Ver</button>
+      </div>
+    </form>
+
+    <form method="post" action="" class="budget-form">
+      <input type="hidden" name="action" value="save_budgets">
+      <input type="hidden" name="year" value="<?= $budget_year ?>">
+      <input type="hidden" name="month" value="<?= $budget_month ?>">
+      <?= csrf_field() ?>
+      <div class="budget-grid">
+        <?php foreach ($budget_rows as $row): ?>
+        <label><?= e($row['name']) ?></label>
+        <input type="number" step="0.01" min="0" name="budgets[<?= (int)$row['id'] ?>]" value="<?= e($row['budget']) ?>">
+        <?php endforeach; ?>
+      </div>
+      <button type="submit" class="btn">Guardar orcamentos</button>
+    </form>
   </div>
 
   <!-- Exportar/Importar Dados -->
