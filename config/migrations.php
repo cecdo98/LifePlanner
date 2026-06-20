@@ -9,9 +9,13 @@
         $statements = array_filter(array_map('trim', explode(';', $schema)));
 
         foreach ($statements as $sql) {
-            $stmt = $conn->prepare($sql);
-            if ($stmt) {
-                $stmt->execute();
+            try {
+                $stmt = $conn->prepare($sql);
+                if ($stmt) {
+                    $stmt->execute();
+                }
+            } catch (Exception $e) {
+                // ignore: statement may already be applied (e.g. ALTER TABLE on existing column)
             }
         }
     }

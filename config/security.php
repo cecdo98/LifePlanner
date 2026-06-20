@@ -19,7 +19,7 @@
     }
 
     function verify_csrf_token() {
-        $token = $_POST['csrf_token'] ?? '';
+        $token = $_REQUEST['csrf_token'] ?? '';
         if (!hash_equals($_SESSION['csrf_token'] ?? '', $token)) {
             http_response_code(403);
             exit('Pedido invalido.');
@@ -71,6 +71,8 @@
             'recurring_applied' => 'Despesas recorrentes aplicadas com sucesso.',
             'tag_saved' => 'Etiqueta criada com sucesso.',
             'tag_deleted' => 'Etiqueta removida.',
+            'income_saved' => 'Rendimento adicionado com sucesso.',
+            'income_deleted' => 'Rendimento removido.',
         ];
 
         return $messages[$key] ?? '';

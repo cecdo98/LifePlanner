@@ -153,12 +153,22 @@
 <nav>
   <span class="nav-brand">LifePlanner</span>
   <ul class="nav-links" id="nav-links">
-    <?php foreach ($navLinks as [$href, $label]):
-      $catNum = (int)filter_var($href, FILTER_SANITIZE_NUMBER_INT);
-      $isActive = strpos($href, 'cat=') !== false && $catNum === $category_id;
-    ?>
-    <li><a href="<?= e($href) ?>" <?= $isActive ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
+    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
+    <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
     <?php endforeach; ?>
+    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
+    <li class="nav-dropdown">
+      <button class="nav-dropdown-btn has-active" onclick="toggleNavDropdown(this)">Categorias ▾</button>
+      <ul class="nav-dropdown-menu">
+        <?php foreach ($catLinks as [$href, $label]):
+          $catNum = (int)filter_var($href, FILTER_SANITIZE_NUMBER_INT);
+          $isActive = strpos($href, 'cat=') !== false && $catNum === $category_id;
+        ?>
+        <li><a href="<?= e($href) ?>" <?= $isActive ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </li>
+    <?php endif; ?>
   </ul>
   <div class="nav-controls">
     <ul class="nav-right">
@@ -295,8 +305,10 @@
     }
     $stmt->execute();
     $result = $stmt->get_result();
+    $optRows = $result->fetch_all(MYSQLI_ASSOC);
+    $tagsByTxn = get_tags_for_transactions($conn, array_column($optRows, 'id'));
     ?>
-    <?php if ($result->num_rows === 0): ?>
+    <?php if (empty($optRows)): ?>
       <p class="text-muted">Sem registos para <?= $year ?>.</p>
     <?php else: ?>
     <table class="data-table">
@@ -312,8 +324,8 @@
         </tr>
       </thead>
       <tbody>
-        <?php while ($row = $result->fetch_assoc()):
-          $rowTags = get_transaction_tags($conn, (int)$row['id']);
+        <?php foreach ($optRows as $row):
+          $rowTags = $tagsByTxn[(int)$row['id']] ?? [];
         ?>
         <tr>
           <td class="amount"><?= number_format($row['amount'], 2, ',', '.') ?> €</td>
@@ -342,7 +354,7 @@
             </form>
           </td>
         </tr>
-        <?php endwhile; ?>
+        <?php endforeach; ?>
       </tbody>
     </table>
     <?php endif; ?>

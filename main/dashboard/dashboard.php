@@ -12,12 +12,34 @@
     $nif     = validate_nif_filter($_GET['nif'] ?? 'all');
     $success = flash_message($_GET['msg'] ?? '');
 
-    // Aplicar recorrentes se pedido
-    if (isset($_GET['apply_recurring']) && $_GET['apply_recurring'] === '1') {
+    // POST: aplicar recorrentes / gerir rendimentos
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf_token();
-        $n = apply_recurring_for_month($conn, $user_id, $year, $month);
-        header("Location: dashboard.php?year=$year&month=$month&msg=" . ($n > 0 ? 'recurring_applied' : 'recurring_applied'));
-        exit();
+        $pAction = $_POST['action'] ?? '';
+        $pYear   = validate_year($_POST['year'] ?? null);
+        $pMonth  = validate_month($_POST['month'] ?? null);
+
+        if ($pAction === 'apply_recurring') {
+            apply_recurring_for_month($conn, $user_id, $pYear, $pMonth);
+            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=recurring_applied");
+            exit();
+        }
+        if ($pAction === 'add_income') {
+            $iAmt  = filter_var($_POST['income_amount'] ?? 0, FILTER_VALIDATE_FLOAT);
+            $iDesc = trim($_POST['income_desc'] ?? '');
+            $iDate = $_POST['income_date'] ?? '';
+            if ($iAmt !== false && $iAmt > 0 && $iDesc !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $iDate)) {
+                add_income_entry($conn, $user_id, $pYear, $pMonth, $iAmt, $iDesc, $iDate);
+            }
+            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=income_saved");
+            exit();
+        }
+        if ($pAction === 'delete_income') {
+            $iId = intval($_POST['income_id'] ?? 0);
+            if ($iId > 0) delete_income_entry($conn, $user_id, $iId);
+            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=income_deleted");
+            exit();
+        }
     }
 
     $meses = [
@@ -36,6 +58,30 @@
     $resSalary = $stmtSalary->get_result()->fetch_assoc();
     $salary = $resSalary ? (float)$resSalary['salary'] : 0.00;
 
+    // Auto-aplicar recorrentes na primeira visita do mês actual
+    $today    = new DateTime();
+    $curYear  = (int)$today->format('Y');
+    $curMonth = (int)$today->format('n');
+    if ($year === $curYear && $month === $curMonth) {
+        $autoChk = $conn->prepare("SELECT 1 FROM recurring_auto_applied WHERE user_id=? AND year=? AND month=?");
+        $autoChk->bind_param("iii", $user_id, $year, $month);
+        $autoChk->execute();
+        if (!$autoChk->get_result()->fetch_assoc()) {
+            $autoN = apply_recurring_for_month($conn, $user_id, $year, $month);
+            $markAuto = $conn->prepare("INSERT OR IGNORE INTO recurring_auto_applied (user_id, year, month) VALUES (?,?,?)");
+            $markAuto->bind_param("iii", $user_id, $year, $month);
+            $markAuto->execute();
+            if ($autoN > 0 && !$success) {
+                $success = "$autoN despesa" . ($autoN !== 1 ? 's' : '') . " recorrente" . ($autoN !== 1 ? 's' : '') . " aplicada" . ($autoN !== 1 ? 's' : '') . " automaticamente em " . $mesesFull[$month] . ".";
+            }
+        }
+    }
+
+    // Rendimentos extra do mês
+    $incomeEntries = get_income_entries($conn, $user_id, $year, $month);
+    $otherIncome   = (float)array_sum(array_column($incomeEntries, 'amount'));
+    $totalIncome   = $salary + $otherIncome;
+
     // Total gasto (com ou sem filtro NIF)
     if ($nif === 'all') {
         $stmtTotal = $conn->prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ?");
@@ -46,15 +92,15 @@
     }
     $stmtTotal->execute();
     $totalGasto = (float)($stmtTotal->get_result()->fetch_assoc()['total'] ?? 0);
-    $restante = $salary - $totalGasto;
-    $percentSpent = $salary > 0 ? min(999, round(($totalGasto / $salary) * 100, 1)) : 0;
+    $restante = $totalIncome - $totalGasto;
+    $percentSpent = $totalIncome > 0 ? min(999, round(($totalGasto / $totalIncome) * 100, 1)) : 0;
 
     // Total gasto sem filtro NIF (para sync)
     $stmtTotalAll = $conn->prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ?");
     $stmtTotalAll->bind_param("iii", $user_id, $year, $month);
     $stmtTotalAll->execute();
     $totalGastoAll = (float)($stmtTotalAll->get_result()->fetch_assoc()['total'] ?? 0);
-    $restanteAll = $salary - $totalGastoAll;
+    $restanteAll = $totalIncome - $totalGastoAll;
 
     // Mes anterior
     $prevMonth = $month === 1 ? 12 : $month - 1;
@@ -72,13 +118,10 @@
     $diffAnteriorPct = $totalAnterior > 0 ? round(($diffAnterior / $totalAnterior) * 100, 1) : null;
 
     // Previsao de gastos para o mes atual
-    $today = new DateTime();
-    $currentYear  = (int)$today->format('Y');
-    $currentMonth = (int)$today->format('n');
     $forecast = null;
     $daysElapsed = null;
     $daysInMonth = null;
-    if ($year === $currentYear && $month === $currentMonth && $totalGasto > 0) {
+    if ($year === $curYear && $month === $curMonth && $totalGasto > 0) {
         $daysElapsed = (int)$today->format('j');
         $daysInMonth = (int)$today->format('t');
         if ($daysElapsed > 0) {
@@ -203,39 +246,11 @@
         $weeklyMap[4] ?? 0,
     ];
 
-    // Ultimos movimentos
-    $stmtLatest = $conn->prepare("
-        SELECT t.amount, t.date, t.description, t.nif, c.name AS categoria
-        FROM transactions t
-        LEFT JOIN categories c ON c.id = t.category_id
-        WHERE t.user_id = ?
-        ORDER BY t.date DESC, t.id DESC
-        LIMIT 8
-    ");
-    $stmtLatest->bind_param("i", $user_id);
-    $stmtLatest->execute();
-    $latestTransactions = [];
-    $resLatest = $stmtLatest->get_result();
-    while ($tx = $resLatest->fetch_assoc()) {
-        $latestTransactions[] = $tx;
-    }
-
     // Metas de poupança
     $savingsGoals = get_savings_goals($conn, $user_id);
 
-    // Verificar recorrentes pendentes para este mes
-    $recurring = get_recurring_expenses($conn, $user_id);
-    $pendingRecurring = 0;
-    foreach ($recurring as $r) {
-        if (!$r['active']) continue;
-        $rid = (int)$r['id'];
-        $chk = $conn->prepare("SELECT 1 FROM recurring_applied WHERE recurring_id=? AND user_id=? AND year=? AND month=?");
-        $chk->bind_param("iiii", $rid, $user_id, $year, $month);
-        $chk->execute();
-        if (!$chk->get_result()->fetch_assoc()) {
-            $pendingRecurring++;
-        }
-    }
+    // Verificar recorrentes pendentes para este mes (1 query em vez de N)
+    $pendingRecurring = get_pending_recurring($conn, $user_id, $year, $month);
 
     // JS data
     $jsLabels   = [];
@@ -269,9 +284,19 @@
 <nav>
   <span class="nav-brand">LifePlanner</span>
   <ul class="nav-links" id="nav-links">
-    <?php foreach ($navLinks as [$href, $label]): ?>
+    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
     <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
     <?php endforeach; ?>
+    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
+    <li class="nav-dropdown">
+      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
+      <ul class="nav-dropdown-menu">
+        <?php foreach ($catLinks as [$href, $label]): ?>
+        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </li>
+    <?php endif; ?>
   </ul>
   <div class="nav-controls">
     <ul class="nav-right">
@@ -300,10 +325,25 @@
   </div>
   <?php endif; ?>
 
-  <?php if ($pendingRecurring > 0): ?>
-  <div class="alert alert-warning" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
-    <span>📋 <?= $pendingRecurring ?> despesa<?= $pendingRecurring > 1 ? 's' : '' ?> recorrente<?= $pendingRecurring > 1 ? 's' : '' ?> por aplicar em <?= e($mesesFull[$month]) ?>.</span>
-    <a href="dashboard.php?year=<?= $year ?>&month=<?= $month ?>&apply_recurring=1&csrf_token=<?= e(csrf_token()) ?>" class="btn btn-sm" style="white-space:nowrap">Aplicar agora</a>
+  <?php if (!empty($pendingRecurring)): ?>
+  <div class="alert alert-warning">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+      <div>
+        <strong><?= count($pendingRecurring) ?> despesa<?= count($pendingRecurring) !== 1 ? 's' : '' ?> recorrente<?= count($pendingRecurring) !== 1 ? 's' : '' ?> por aplicar em <?= e($mesesFull[$month]) ?>:</strong>
+        <ul style="margin:5px 0 0 16px;padding:0;font-size:0.87rem;">
+          <?php foreach ($pendingRecurring as $pr): ?>
+          <li><?= e($pr['description']) ?> — <?= number_format((float)$pr['amount'], 2, ',', '.') ?> €</li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+      <form method="post" action="dashboard.php" style="flex-shrink:0;margin-top:2px;">
+        <?= csrf_field() ?>
+        <input type="hidden" name="action" value="apply_recurring">
+        <input type="hidden" name="year" value="<?= $year ?>">
+        <input type="hidden" name="month" value="<?= $month ?>">
+        <button type="submit" class="btn btn-sm" style="white-space:nowrap">Aplicar agora</button>
+      </form>
+    </div>
   </div>
   <?php endif; ?>
 
@@ -345,15 +385,18 @@
       <div class="kpi-value"><?= number_format($totalGasto, 2, ',', '.') ?> €</div>
     </div>
     <div class="kpi-card blue">
-      <div class="kpi-label">Ordenado</div>
-      <div class="kpi-value"><?= number_format($salary, 2, ',', '.') ?> €</div>
+      <div class="kpi-label">Total Rendimentos</div>
+      <div class="kpi-value"><?= number_format($totalIncome, 2, ',', '.') ?> €</div>
+      <?php if ($otherIncome > 0): ?>
+      <div class="kpi-note">Ordenado <?= number_format($salary, 2, ',', '.') ?> € + outros <?= number_format($otherIncome, 2, ',', '.') ?> €</div>
+      <?php endif; ?>
     </div>
     <div class="kpi-card <?= $restante >= 0 ? 'green' : 'red' ?>">
       <div class="kpi-label">Saldo Restante</div>
       <div class="kpi-value"><?= number_format($restante, 2, ',', '.') ?> €</div>
     </div>
     <div class="kpi-card blue">
-      <div class="kpi-label">% do Ordenado</div>
+      <div class="kpi-label">% Gasto</div>
       <div class="kpi-value"><?= number_format($percentSpent, 1, ',', '.') ?>%</div>
       <div class="kpi-note">
         <?php if ($diffAnteriorPct === null): ?>
@@ -375,59 +418,110 @@
   <!-- Grelha principal -->
   <div class="main-grid">
 
-    <!-- Tabela de categorias -->
-    <div class="card">
-      <div class="card-title">Despesas por Categoria — <?= e($mesesFull[$month]) ?></div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Categoria</th>
-            <th style="text-align:right">Gasto</th>
-            <th style="text-align:right">Orçamento</th>
-            <th style="text-align:right">Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($categoryRows as $row):
-            $amount = (float)$row['total'];
-            $budget = (float)$row['budget'];
-            $budgetPct = $budget > 0 ? min(999, round(($amount / $budget) * 100, 1)) : null;
-          ?>
-          <tr>
-            <td class="cat-name"><?= e($row['categoria']) ?></td>
-            <td style="text-align:right" class="<?= $amount > 0 ? 'amount-pos' : 'amount-zero' ?>">
-              <?= number_format($amount, 2, ',', '.') ?> €
-            </td>
-            <td style="text-align:right"><?= $budget > 0 ? number_format($budget, 2, ',', '.') . ' €' : '—' ?></td>
-            <td style="text-align:right">
-              <?php if ($budget <= 0): ?>
-                <span class="status-muted">Sem limite</span>
-              <?php elseif ($budgetPct <= 80): ?>
-                <span class="status-ok"><?= number_format($budgetPct, 1, ',', '.') ?>%</span>
-              <?php elseif ($budgetPct <= 100): ?>
-                <span class="status-warn"><?= number_format($budgetPct, 1, ',', '.') ?>%</span>
-              <?php else: ?>
-                <span class="status-danger">⚠ <?= number_format($budgetPct, 1, ',', '.') ?>%</span>
-              <?php endif; ?>
-            </td>
-          </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
+    <!-- Tabela de categorias + gráfico semanal -->
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <div class="card-title">Despesas por Categoria — <?= e($mesesFull[$month]) ?></div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th style="text-align:right">Gasto</th>
+              <th style="text-align:right">Orçamento</th>
+              <th style="text-align:right">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($categoryRows as $row):
+              $amount = (float)$row['total'];
+              $budget = (float)$row['budget'];
+              $budgetPct = $budget > 0 ? min(999, round(($amount / $budget) * 100, 1)) : null;
+            ?>
+            <tr>
+              <td class="cat-name"><?= e($row['categoria']) ?></td>
+              <td style="text-align:right" class="<?= $amount > 0 ? 'amount-pos' : 'amount-zero' ?>">
+                <?= number_format($amount, 2, ',', '.') ?> €
+              </td>
+              <td style="text-align:right"><?= $budget > 0 ? number_format($budget, 2, ',', '.') . ' €' : '—' ?></td>
+              <td style="text-align:right">
+                <?php if ($budget <= 0): ?>
+                  <span class="status-muted">Sem limite</span>
+                <?php elseif ($budgetPct <= 80): ?>
+                  <span class="status-ok"><?= number_format($budgetPct, 1, ',', '.') ?>%</span>
+                <?php elseif ($budgetPct <= 100): ?>
+                  <span class="status-warn"><?= number_format($budgetPct, 1, ',', '.') ?>%</span>
+                <?php else: ?>
+                  <span class="status-danger">⚠ <?= number_format($budgetPct, 1, ',', '.') ?>%</span>
+                <?php endif; ?>
+              </td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Gastos por Semana — <?= e($mesesFull[$month]) ?></div>
+        <canvas id="weeklyChart" height="160"></canvas>
+      </div>
     </div>
 
     <!-- Lado direito: ordenado + pie + top categorias -->
     <div>
-      <div class="card salary-panel" style="margin-bottom:14px;">
-        <div class="card-title">Definir Ordenado</div>
-        <form action="../../config/save_salary.php" method="post">
-          <input type="hidden" name="year" value="<?= $year ?>">
-          <input type="hidden" name="month" value="<?= $month ?>">
-          <?= csrf_field() ?>
-          <label>Valor para <?= e($mesesFull[$month]) ?></label>
-          <input type="number" step="0.01" name="salary" value="<?= e($salary) ?>" required>
-          <button type="submit" class="btn" style="width:100%">Guardar</button>
-        </form>
+      <div class="card tab-card" style="margin-bottom:14px;">
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab(this,'tab-salary')">Ordenado</button>
+          <button class="tab-btn" onclick="switchTab(this,'tab-income')">Outros Rendimentos</button>
+        </div>
+        <div class="tab-panel active" id="tab-salary">
+          <form class="salary-panel" action="../../config/save_salary.php" method="post">
+            <input type="hidden" name="year" value="<?= $year ?>">
+            <input type="hidden" name="month" value="<?= $month ?>">
+            <?= csrf_field() ?>
+            <label>Valor para <?= e($mesesFull[$month]) ?></label>
+            <input type="number" step="0.01" name="salary" value="<?= e($salary) ?>" required>
+            <button type="submit" class="btn" style="width:100%">Guardar</button>
+          </form>
+        </div>
+        <div class="tab-panel" id="tab-income">
+          <?php if (!empty($incomeEntries)): ?>
+          <div style="margin-bottom:10px;">
+            <?php foreach ($incomeEntries as $ie): ?>
+            <div class="income-row">
+              <div class="income-row-info">
+                <div class="income-row-name"><?= e($ie['description']) ?></div>
+                <div class="income-row-date"><?= date('d/m/Y', strtotime($ie['date'])) ?></div>
+              </div>
+              <div class="income-row-right">
+                <span class="income-amount">+<?= number_format((float)$ie['amount'], 2, ',', '.') ?> €</span>
+                <form method="post" action="dashboard.php" style="display:inline;margin:0;">
+                  <?= csrf_field() ?>
+                  <input type="hidden" name="action" value="delete_income">
+                  <input type="hidden" name="income_id" value="<?= (int)$ie['id'] ?>">
+                  <input type="hidden" name="year" value="<?= $year ?>">
+                  <input type="hidden" name="month" value="<?= $month ?>">
+                  <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remover rendimento?')" style="margin:0;">×</button>
+                </form>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
+          <form method="post" action="dashboard.php">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="add_income">
+            <input type="hidden" name="year" value="<?= $year ?>">
+            <input type="hidden" name="month" value="<?= $month ?>">
+            <div class="income-form">
+              <input type="text" name="income_desc" placeholder="Descrição (ex: Freelance)" maxlength="100" required>
+              <div class="income-form-row">
+                <input type="number" name="income_amount" step="0.01" min="0.01" placeholder="Valor (€)" required>
+                <input type="date" name="income_date" value="<?= date('Y-m-d', mktime(0,0,0,$month,1,$year)) ?>" required>
+              </div>
+              <button type="submit" class="btn" style="width:100%">Adicionar</button>
+            </div>
+          </form>
+        </div>
       </div>
 
       <div class="card" style="margin-bottom:14px;">
@@ -493,63 +587,21 @@
   </div>
   <?php endif; ?>
 
-  <!-- Ultimos movimentos -->
-  <div class="card" style="margin-bottom:20px;">
-    <div class="card-title collapse-header" onclick="toggleLatest()">
-      <span>Últimos Movimentos</span>
-      <span class="collapse-icon" id="latest-icon">+</span>
-    </div>
-    <div id="latest-content" style="display:none;">
-      <?php if (empty($latestTransactions)): ?>
-        <p class="text-muted">Ainda sem movimentos registados.</p>
-      <?php else: ?>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Categoria</th>
-            <th>Descrição</th>
-            <th>NIF</th>
-            <th style="text-align:right">Valor</th>
-          </tr>
-        </thead>
-        <tbody>
-          <?php foreach ($latestTransactions as $tx): ?>
-          <tr>
-            <td><?= date('d/m/Y', strtotime($tx['date'])) ?></td>
-            <td><?= e($tx['categoria'] ?? 'Sem categoria') ?></td>
-            <td><?= e($tx['description']) ?></td>
-            <td><?= (int)$tx['nif'] === 1 ? 'Sim' : 'Não' ?></td>
-            <td style="text-align:right" class="amount-pos"><?= number_format((float)$tx['amount'], 2, ',', '.') ?> €</td>
-          </tr>
-          <?php endforeach; ?>
-        </tbody>
-      </table>
-      <?php endif; ?>
-    </div>
-  </div>
-
   <!-- Gráficos -->
   <div style="margin-bottom:20px;">
-    <div class="charts-grid">
-      <div class="card">
-        <div class="card-title">Gastos por Semana — <?= e($mesesFull[$month]) ?></div>
-        <canvas id="weeklyChart" height="200"></canvas>
-      </div>
-      <div class="card">
-        <div class="card-title">Saldo Restante por Mês — <?= $year ?></div>
-        <canvas id="balanceChart" height="200"></canvas>
-      </div>
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">Saldo Restante por Mês — <?= $year ?></div>
+      <canvas id="balanceChart" height="150"></canvas>
     </div>
 
     <div class="card" style="margin-bottom:14px;">
       <div class="card-title">Ordenado vs Gasto vs Saldo — <?= $year ?></div>
-      <canvas id="overviewChart" height="120"></canvas>
+      <canvas id="overviewChart" height="100"></canvas>
     </div>
 
     <div class="card">
       <div class="card-title"><?= $year ?> vs <?= $yearPrev ?> — Gastos por Mês</div>
-      <canvas id="compareChart" height="140"></canvas>
+      <canvas id="compareChart" height="110"></canvas>
     </div>
   </div>
 
@@ -658,13 +710,12 @@
     }
   }));
 
-  function toggleLatest() {
-    const content = document.getElementById('latest-content');
-    const icon    = document.getElementById('latest-icon');
-    const open = content.style.display === 'none';
-    content.style.display = open ? 'block' : 'none';
-    icon.textContent = open ? '−' : '+';
-    icon.classList.toggle('open', open);
+  function switchTab(btn, panelId) {
+    const card = btn.closest('.tab-card');
+    card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(panelId).classList.add('active');
   }
 </script>
 

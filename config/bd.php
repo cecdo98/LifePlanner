@@ -19,23 +19,27 @@
         }
 
         public function execute() {
-            foreach ($this->params as $k => $v) {
-                $type = PDO::PARAM_STR;
-                if (is_int($v)) {
-                    $type = PDO::PARAM_INT;
-                } elseif (is_bool($v)) {
-                    $type = PDO::PARAM_BOOL;
-                } elseif (is_null($v)) {
-                    $type = PDO::PARAM_NULL;
+            try {
+                foreach ($this->params as $k => $v) {
+                    $type = PDO::PARAM_STR;
+                    if (is_int($v)) {
+                        $type = PDO::PARAM_INT;
+                    } elseif (is_bool($v)) {
+                        $type = PDO::PARAM_BOOL;
+                    } elseif (is_null($v)) {
+                        $type = PDO::PARAM_NULL;
+                    }
+                    $this->pdoStmt->bindValue($k + 1, $v, $type);
                 }
-                $this->pdoStmt->bindValue($k + 1, $v, $type);
-            }
 
-            $res = $this->pdoStmt->execute();
-            if ($res && preg_match('/^\s*(SELECT|PRAGMA)/i', $this->pdoStmt->queryString)) {
-                $this->result = $this->pdoStmt->fetchAll(PDO::FETCH_ASSOC);
+                $res = $this->pdoStmt->execute();
+                if ($res && preg_match('/^\s*(SELECT|PRAGMA)/i', $this->pdoStmt->queryString)) {
+                    $this->result = $this->pdoStmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+                return $res;
+            } catch (PDOException $e) {
+                return false;
             }
-            return $res;
         }
 
         public function get_result() {
@@ -97,6 +101,20 @@
             } catch (Exception $e) {
                 $this->error = $e->getMessage();
                 return false;
+            }
+        }
+
+        public function begin_transaction() {
+            $this->pdo->beginTransaction();
+        }
+
+        public function commit() {
+            $this->pdo->commit();
+        }
+
+        public function rollback() {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
             }
         }
     }

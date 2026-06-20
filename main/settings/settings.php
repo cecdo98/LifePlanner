@@ -116,6 +116,24 @@
           $success = flash_message('budget_saved');
       }
 
+      // --- Repetir orçamentos ---
+      if ($action === 'repeat_budget') {
+          $srcYear      = validate_year($_POST['year'] ?? null);
+          $srcMonth     = validate_month($_POST['month'] ?? null);
+          $months_ahead = min(12, max(1, intval($_POST['months_ahead'] ?? 1)));
+          $src_rows     = get_monthly_budget_rows($conn, $user_id, $srcYear, $srcMonth);
+          for ($i = 1; $i <= $months_ahead; $i++) {
+              $ty = $srcYear; $tm = $srcMonth + $i;
+              while ($tm > 12) { $tm -= 12; $ty++; }
+              foreach ($src_rows as $row) {
+                  $budget = (float)$row['budget'];
+                  if ($budget > 0)
+                      save_monthly_budget($conn, $user_id, (int)$row['id'], $ty, $tm, $budget);
+              }
+          }
+          $success = 'Orçamentos repetidos para os próximos ' . $months_ahead . ' mês(es).';
+      }
+
       // --- Metas de poupança: adicionar ---
       if ($action === 'add_goal') {
           $name    = trim($_POST['goal_name'] ?? '');
@@ -268,9 +286,19 @@
 <nav>
   <span class="nav-brand">LifePlanner</span>
   <ul class="nav-links" id="nav-links">
-    <?php foreach ($navLinks as [$href, $label]): ?>
+    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
     <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
     <?php endforeach; ?>
+    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
+    <li class="nav-dropdown">
+      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
+      <ul class="nav-dropdown-menu">
+        <?php foreach ($catLinks as [$href, $label]): ?>
+        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </li>
+    <?php endif; ?>
   </ul>
   <div class="nav-controls">
     <ul class="nav-right">
@@ -285,279 +313,341 @@
 </nav>
 
 <div class="page">
-  <h1 class="page-title">Definições</h1>
-  <p class="page-subtitle">Gere a tua conta e preferências.</p>
+  <div class="page-header">
+    <h1 class="page-title">Definições</h1>
+    <p class="page-subtitle">Gere a tua conta e preferências.</p>
+  </div>
 
   <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
   <?php if ($error):   ?><div class="alert alert-error"><?= e($error) ?></div><?php endif; ?>
 
-  <!-- Conta -->
-  <div class="card">
-    <div class="card-title">Conta</div>
-    <div class="user-row">
-      <div class="user-avatar"><?= e(strtoupper(substr($user['username'], 0, 1))) ?></div>
-      <div>
-        <div class="user-name"><?= e($user['username']) ?></div>
-        <div class="user-label">Utilizador</div>
+  <div class="comic-grid">
+
+    <!-- Painel 01: Conta -->
+    <div class="panel">
+      <div class="panel-caption c-blue">
+        <span>Conta</span>
+        <span class="panel-num">01</span>
       </div>
-    </div>
-  </div>
-
-  <!-- Password -->
-  <div class="card">
-    <div class="card-title">Alterar Password</div>
-    <form method="post" action="">
-      <input type="hidden" name="action" value="change_password">
-      <?= csrf_field() ?>
-      <div class="form-stack">
-        <div class="form-field"><label>Password atual</label><input type="password" name="current_password" required autocomplete="current-password"></div>
-        <div class="form-field"><label>Nova password</label><input type="password" name="new_password" required autocomplete="new-password"></div>
-        <div class="form-field"><label>Confirmar</label><input type="password" name="confirm_password" required autocomplete="new-password"></div>
-        <button type="submit" class="btn">Guardar password</button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Categorias -->
-  <div class="card">
-    <div class="card-title">Categorias</div>
-
-    <p class="section-label">Adicionar categoria</p>
-    <form method="post" action="" class="inline-form" autocomplete="off">
-      <input type="hidden" name="action" value="add_category">
-      <?= csrf_field() ?>
-      <input type="text" name="category_name" placeholder="Nome da categoria" maxlength="60" required>
-      <button type="submit" class="btn">Adicionar</button>
-    </form>
-
-    <?php if (!empty($all_categories)): ?>
-    <p class="section-label" style="margin-top:18px;">Renomear categoria</p>
-    <form method="post" action="" class="delete-cat-row" autocomplete="off">
-      <input type="hidden" name="action" value="rename_category">
-      <?= csrf_field() ?>
-      <select name="cat_id" required>
-        <option value="" disabled selected>Categoria</option>
-        <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
-      </select>
-      <input type="text" name="category_name" placeholder="Novo nome" maxlength="60" required>
-      <button type="submit" class="btn">Renomear</button>
-    </form>
-
-    <p class="section-label" style="margin-top:18px;">Remover categoria</p>
-    <p class="section-hint">As despesas serão movidas para a categoria que escolheres.</p>
-    <form method="post" action="" class="delete-cat-row">
-      <input type="hidden" name="action" value="delete_category">
-      <?= csrf_field() ?>
-      <select name="cat_id" required>
-        <option value="" disabled selected>Categoria a remover</option>
-        <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?> (<?= $category_counts[(int)$c['id']] ?? 0 ?>)</option><?php endforeach; ?>
-      </select>
-      <span class="arrow-label">→ mover para →</span>
-      <select name="move_to_id" required>
-        <option value="" disabled selected>Categoria destino</option>
-        <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
-      </select>
-      <button type="submit" class="btn btn-remove" onclick="return confirm('Tens a certeza?')">Remover</button>
-    </form>
-
-    <div class="cat-list">
-      <?php foreach ($all_categories as $c): ?><span class="cat-badge"><?= e($c['name']) ?></span><?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-  </div>
-
-  <!-- Orçamentos -->
-  <div class="card">
-    <div class="card-title">Orçamentos Mensais</div>
-    <form method="get" action="" class="delete-cat-row" style="margin-bottom:16px;">
-      <select name="budget_year">
-        <?php for ($y=2026;$y<=2070;$y++): ?><option value="<?=$y?>" <?=$y===$budget_year?'selected':''?>><?=$y?></option><?php endfor; ?>
-      </select>
-      <select name="budget_month">
-        <?php foreach ($months as $n => $nm): ?><option value="<?=$n?>" <?=$n===$budget_month?'selected':''?>><?=e($nm)?></option><?php endforeach; ?>
-      </select>
-      <button type="submit" class="btn">Ver</button>
-    </form>
-    <form method="post" action="">
-      <input type="hidden" name="action" value="save_budgets">
-      <input type="hidden" name="year" value="<?= $budget_year ?>">
-      <input type="hidden" name="month" value="<?= $budget_month ?>">
-      <?= csrf_field() ?>
-      <div class="budget-grid">
-        <?php foreach ($budget_rows as $row): ?>
-        <label><?= e($row['name']) ?></label>
-        <input type="number" step="0.01" min="0" name="budgets[<?= (int)$row['id'] ?>]" value="<?= e($row['budget']) ?>">
-        <?php endforeach; ?>
-      </div>
-      <button type="submit" class="btn">Guardar orçamentos</button>
-    </form>
-  </div>
-
-  <!-- Metas de Poupança -->
-  <div class="card" id="goals">
-    <div class="card-title">Metas de Poupança</div>
-
-    <?php if (!empty($savings_goals)): ?>
-    <div class="item-list" style="margin-bottom:20px;">
-      <?php foreach ($savings_goals as $g):
-        $gpct = $g['target_amount'] > 0 ? min(100, round(($g['current_amount'] / $g['target_amount']) * 100)) : 0;
-        $gcolor = $gpct >= 100 ? 'var(--green)' : ($gpct >= 60 ? 'var(--accent)' : 'var(--orange)');
-      ?>
-      <div class="item-row" style="flex-direction:column;align-items:stretch;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div class="item-info">
-            <div class="item-name"><?= e($g['name']) ?></div>
-            <?php if ($g['description']): ?><div class="item-meta"><?= e($g['description']) ?></div><?php endif; ?>
-            <?php if ($g['deadline']): ?><div class="item-meta">Prazo: <?= date('d/m/Y', strtotime($g['deadline'])) ?></div><?php endif; ?>
-          </div>
-          <div style="text-align:right;flex-shrink:0;margin-left:12px;">
-            <div style="font-weight:700;color:<?= $gcolor ?>"><?= $gpct ?>%</div>
-            <div class="item-meta"><?= number_format((float)$g['current_amount'],2,',','.') ?> / <?= number_format((float)$g['target_amount'],2,',','.') ?> €</div>
+      <div class="panel-body">
+        <div class="user-row">
+          <div class="user-avatar"><?= e(strtoupper(substr($user['username'], 0, 1))) ?></div>
+          <div>
+            <div class="user-name"><?= e($user['username']) ?></div>
+            <div class="user-label">Utilizador</div>
           </div>
         </div>
-        <div class="goal-bar"><div class="goal-fill" style="width:<?= $gpct ?>%;background:<?= $gcolor ?>"></div></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <form method="post" action="" style="display:flex;gap:6px;align-items:center;">
-            <input type="hidden" name="action" value="update_goal">
-            <input type="hidden" name="goal_id" value="<?= (int)$g['id'] ?>">
-            <?= csrf_field() ?>
-            <input type="number" step="0.01" min="0" name="goal_current" value="<?= e($g['current_amount']) ?>" style="width:120px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;font-size:0.82rem;outline:none;">
-            <button type="submit" class="btn btn-sm">Atualizar</button>
-          </form>
-          <form method="post" action="">
-            <input type="hidden" name="action" value="delete_goal">
-            <input type="hidden" name="goal_id" value="<?= (int)$g['id'] ?>">
-            <?= csrf_field() ?>
-            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Apagar esta meta?')" style="margin-top:0;">Apagar</button>
-          </form>
-        </div>
       </div>
-      <?php endforeach; ?>
     </div>
-    <?php endif; ?>
 
-    <p class="section-label">Nova meta</p>
-    <form method="post" action="">
-      <input type="hidden" name="action" value="add_goal">
-      <?= csrf_field() ?>
-      <div class="form-stack">
-        <div class="form-field"><label>Nome</label><input type="text" name="goal_name" required maxlength="80" placeholder="Ex: Férias de verão"></div>
-        <div class="form-field"><label>Objetivo (€)</label><input type="number" name="goal_target" step="0.01" min="0.01" required></div>
-        <div class="form-field"><label>Valor atual (€)</label><input type="number" name="goal_current" step="0.01" min="0" value="0"></div>
-        <div class="form-field"><label>Prazo</label><input type="date" name="goal_deadline"></div>
-        <div class="form-field"><label>Notas</label><input type="text" name="goal_desc" maxlength="200"></div>
-        <button type="submit" class="btn">Adicionar meta</button>
+    <!-- Painel 02: Password -->
+    <div class="panel">
+      <div class="panel-caption">
+        <span>Alterar Password</span>
+        <span class="panel-num">02</span>
       </div>
-    </form>
-  </div>
-
-  <!-- Despesas Recorrentes -->
-  <div class="card">
-    <div class="card-title">Despesas Recorrentes</div>
-    <p class="section-hint">Despesas fixas mensais. Aplica-as no dashboard para as inserir automaticamente.</p>
-
-    <?php if (!empty($recurring_list)): ?>
-    <div class="item-list" style="margin-bottom:20px;">
-      <?php foreach ($recurring_list as $r): ?>
-      <div class="item-row">
-        <div class="item-info">
-          <div class="item-name">
-            <?= e($r['description']) ?>
-            <?php if (!$r['active']): ?><span style="font-size:0.72rem;color:var(--muted);margin-left:6px;">(inativo)</span><?php endif; ?>
+      <div class="panel-body">
+        <form method="post" action="">
+          <input type="hidden" name="action" value="change_password">
+          <?= csrf_field() ?>
+          <div class="form-stack">
+            <div class="form-field"><label>Password atual</label><input type="password" name="current_password" required autocomplete="current-password"></div>
+            <div class="form-field"><label>Nova password</label><input type="password" name="new_password" required autocomplete="new-password"></div>
+            <div class="form-field"><label>Confirmar</label><input type="password" name="confirm_password" required autocomplete="new-password"></div>
+            <button type="submit" class="btn">Guardar</button>
           </div>
-          <div class="item-meta">Dia <?= (int)$r['day_of_month'] ?> · <?= e($r['category_name'] ?? 'Sem categoria') ?><?= $r['nif'] ? ' · NIF' : '' ?></div>
-        </div>
-        <div class="item-amount"><?= number_format((float)$r['amount'], 2, ',', '.') ?> €</div>
-        <div class="item-actions">
-          <form method="post" action="" style="display:inline;">
-            <input type="hidden" name="action" value="toggle_recurring">
-            <input type="hidden" name="recurring_id" value="<?= (int)$r['id'] ?>">
-            <input type="hidden" name="active" value="<?= $r['active'] ? 0 : 1 ?>">
-            <?= csrf_field() ?>
-            <button type="submit" class="btn btn-sm btn-ghost" style="margin-top:0;"><?= $r['active'] ? 'Pausar' : 'Ativar' ?></button>
-          </form>
-          <form method="post" action="" style="display:inline;">
-            <input type="hidden" name="action" value="delete_recurring">
-            <input type="hidden" name="recurring_id" value="<?= (int)$r['id'] ?>">
-            <?= csrf_field() ?>
-            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Apagar despesa recorrente?')" style="margin-top:0;">Apagar</button>
-          </form>
-        </div>
+        </form>
       </div>
-      <?php endforeach; ?>
     </div>
-    <?php endif; ?>
 
-    <p class="section-label">Nova despesa recorrente</p>
-    <form method="post" action="">
-      <input type="hidden" name="action" value="add_recurring">
-      <?= csrf_field() ?>
-      <div class="form-stack">
-        <div class="form-field"><label>Descrição</label><input type="text" name="rec_desc" required maxlength="255" placeholder="Ex: Renda"></div>
-        <div class="form-field"><label>Valor (€)</label><input type="number" name="rec_amount" step="0.01" min="0.01" required></div>
-        <div class="form-field">
-          <label>Categoria</label>
-          <select name="rec_category">
-            <option value="">Sem categoria</option>
+    <!-- Painel 03: Categorias (full) -->
+    <div class="panel panel-full">
+      <div class="panel-caption c-green">
+        <span>Categorias</span>
+        <span class="panel-num">03</span>
+      </div>
+      <div class="panel-body">
+        <p class="section-label">Adicionar categoria</p>
+        <form method="post" action="" class="inline-form" autocomplete="off">
+          <input type="hidden" name="action" value="add_category">
+          <?= csrf_field() ?>
+          <input type="text" name="category_name" placeholder="Nome da categoria" maxlength="60" required>
+          <button type="submit" class="btn">Adicionar</button>
+        </form>
+
+        <?php if (!empty($all_categories)): ?>
+        <p class="section-label" style="margin-top:18px;">Renomear categoria</p>
+        <form method="post" action="" class="delete-cat-row" autocomplete="off">
+          <input type="hidden" name="action" value="rename_category">
+          <?= csrf_field() ?>
+          <select name="cat_id" required>
+            <option value="" disabled selected>Categoria</option>
             <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
           </select>
-        </div>
-        <div class="form-field"><label>Dia do mês</label><input type="number" name="rec_day" min="1" max="28" value="1"></div>
-        <div class="form-field">
-          <label>NIF</label>
-          <div style="display:flex;gap:12px;padding-top:4px;">
-            <label style="font-size:0.85rem;font-weight:400;color:var(--text);cursor:pointer;"><input type="radio" name="rec_nif" value="0" checked style="accent-color:var(--accent);"> Não</label>
-            <label style="font-size:0.85rem;font-weight:400;color:var(--text);cursor:pointer;"><input type="radio" name="rec_nif" value="1" style="accent-color:var(--accent);"> Sim</label>
-          </div>
-        </div>
-        <button type="submit" class="btn">Adicionar recorrente</button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Etiquetas -->
-  <div class="card">
-    <div class="card-title">Etiquetas</div>
-
-    <?php if (!empty($all_tags)): ?>
-    <div class="cat-list" style="margin-bottom:16px;">
-      <?php foreach ($all_tags as $tag): ?>
-      <span style="display:inline-flex;align-items:center;gap:5px;" class="cat-badge">
-        <?= e($tag['name']) ?>
-        <form method="post" action="" style="display:inline;margin:0;">
-          <input type="hidden" name="action" value="delete_tag">
-          <input type="hidden" name="tag_id" value="<?= (int)$tag['id'] ?>">
-          <?= csrf_field() ?>
-          <button type="submit" style="background:none;border:none;color:inherit;cursor:pointer;font-size:0.75rem;padding:0;line-height:1;" title="Apagar" onclick="return confirm('Apagar etiqueta?')">×</button>
+          <input type="text" name="category_name" placeholder="Novo nome" maxlength="60" required>
+          <button type="submit" class="btn">Renomear</button>
         </form>
-      </span>
-      <?php endforeach; ?>
+
+        <p class="section-label" style="margin-top:18px;">Remover categoria</p>
+        <p class="section-hint">As despesas serão movidas para a categoria que escolheres.</p>
+        <form method="post" action="" class="delete-cat-row">
+          <input type="hidden" name="action" value="delete_category">
+          <?= csrf_field() ?>
+          <select name="cat_id" required>
+            <option value="" disabled selected>Categoria a remover</option>
+            <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?> (<?= $category_counts[(int)$c['id']] ?? 0 ?>)</option><?php endforeach; ?>
+          </select>
+          <span class="arrow-label">→ mover para →</span>
+          <select name="move_to_id" required>
+            <option value="" disabled selected>Categoria destino</option>
+            <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
+          </select>
+          <button type="submit" class="btn btn-remove" onclick="return confirm('Tens a certeza?')">Remover</button>
+        </form>
+
+        <div class="cat-list">
+          <?php foreach ($all_categories as $c): ?><span class="cat-badge"><?= e($c['name']) ?></span><?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+      </div>
     </div>
-    <?php endif; ?>
 
-    <form method="post" action="" class="inline-form">
-      <input type="hidden" name="action" value="add_tag">
-      <?= csrf_field() ?>
-      <input type="text" name="tag_name" placeholder="Nova etiqueta" maxlength="40" required>
-      <button type="submit" class="btn">Adicionar</button>
-    </form>
-  </div>
+    <!-- Painel 04: Orçamentos Mensais -->
+    <div class="panel">
+      <div class="panel-caption c-orange">
+        <span>Orçamentos Mensais</span>
+        <span class="panel-num">04</span>
+      </div>
+      <div class="panel-body">
+        <form method="get" action="" class="delete-cat-row" style="margin-bottom:16px;">
+          <select name="budget_year">
+            <?php for ($y=2026;$y<=2070;$y++): ?><option value="<?=$y?>" <?=$y===$budget_year?'selected':''?>><?=$y?></option><?php endfor; ?>
+          </select>
+          <select name="budget_month">
+            <?php foreach ($months as $n => $nm): ?><option value="<?=$n?>" <?=$n===$budget_month?'selected':''?>><?=e($nm)?></option><?php endforeach; ?>
+          </select>
+          <button type="submit" class="btn">Ver</button>
+        </form>
 
-  <!-- Import/Export -->
-  <div class="card">
-    <div class="card-title">Exportar / Importar Dados</div>
-    <p style="font-size:0.84rem;color:var(--muted);margin-bottom:14px;">Exporta os teus dados para JSON ou importa de volta.</p>
-    <div class="export-import-row">
-      <a href="./import.php" class="btn btn-ghost">Gerir dados (Import/Export)</a>
+        <form method="post" action="">
+          <input type="hidden" name="action" value="save_budgets">
+          <input type="hidden" name="year" value="<?= $budget_year ?>">
+          <input type="hidden" name="month" value="<?= $budget_month ?>">
+          <?= csrf_field() ?>
+          <div class="budget-grid">
+            <?php foreach ($budget_rows as $row): ?>
+            <label><?= e($row['name']) ?></label>
+            <input type="number" step="0.01" min="0" name="budgets[<?= (int)$row['id'] ?>]" value="<?= e($row['budget']) ?>">
+            <?php endforeach; ?>
+          </div>
+          <button type="submit" class="btn">Guardar orçamentos</button>
+        </form>
+
+        <hr class="repeat-sep">
+        <p class="section-label">Repetir orçamento</p>
+        <p class="section-hint">Copia o orçamento de <?= e($months[$budget_month]) ?> <?= $budget_year ?> para os próximos meses.</p>
+        <form method="post" action="" class="inline-form">
+          <input type="hidden" name="action" value="repeat_budget">
+          <input type="hidden" name="year" value="<?= $budget_year ?>">
+          <input type="hidden" name="month" value="<?= $budget_month ?>">
+          <?= csrf_field() ?>
+          <input type="number" name="months_ahead" min="1" max="12" value="1" style="width:65px;">
+          <span style="font-size:0.82rem;color:var(--muted);">mês(es) à frente</span>
+          <button type="submit" class="btn">Repetir</button>
+        </form>
+      </div>
     </div>
-  </div>
 
-  <!-- Zona de perigo -->
-  <div class="card">
-    <div class="card-title">Zona de Perigo</div>
-    <p style="font-size:0.84rem;color:var(--muted);margin-bottom:14px;">Terminar sessão remove o acesso imediatamente.</p>
-    <a href="../../config/logout.php" class="btn btn-danger">Terminar sessão</a>
-  </div>
-</div>
+    <!-- Painel 05: Metas de Poupança -->
+    <div class="panel" id="goals">
+      <div class="panel-caption c-purple">
+        <span>Metas de Poupança</span>
+        <span class="panel-num">05</span>
+      </div>
+      <div class="panel-body">
+        <?php if (!empty($savings_goals)): ?>
+        <div class="item-list" style="margin-bottom:20px;">
+          <?php foreach ($savings_goals as $g):
+            $gpct = $g['target_amount'] > 0 ? min(100, round(($g['current_amount'] / $g['target_amount']) * 100)) : 0;
+            $gcolor = $gpct >= 100 ? 'var(--green)' : ($gpct >= 60 ? 'var(--accent)' : 'var(--orange)');
+          ?>
+          <div class="item-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div class="item-info">
+                <div class="item-name"><?= e($g['name']) ?></div>
+                <?php if ($g['description']): ?><div class="item-meta"><?= e($g['description']) ?></div><?php endif; ?>
+                <?php if ($g['deadline']): ?><div class="item-meta">Prazo: <?= date('d/m/Y', strtotime($g['deadline'])) ?></div><?php endif; ?>
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+                <div style="font-weight:800;color:<?= $gcolor ?>"><?= $gpct ?>%</div>
+                <div class="item-meta"><?= number_format((float)$g['current_amount'],2,',','.') ?> / <?= number_format((float)$g['target_amount'],2,',','.') ?> €</div>
+              </div>
+            </div>
+            <div class="goal-bar"><div class="goal-fill" style="width:<?= $gpct ?>%;background:<?= $gcolor ?>"></div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <form method="post" action="" style="display:flex;gap:6px;align-items:center;">
+                <input type="hidden" name="action" value="update_goal">
+                <input type="hidden" name="goal_id" value="<?= (int)$g['id'] ?>">
+                <?= csrf_field() ?>
+                <input type="number" step="0.01" min="0" name="goal_current" value="<?= e($g['current_amount']) ?>" style="width:110px;padding:5px 8px;background:var(--bg);border:2px solid var(--border);color:var(--text);border-radius:0;font-size:0.82rem;outline:none;">
+                <button type="submit" class="btn btn-sm">Atualizar</button>
+              </form>
+              <form method="post" action="">
+                <input type="hidden" name="action" value="delete_goal">
+                <input type="hidden" name="goal_id" value="<?= (int)$g['id'] ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Apagar esta meta?')" style="margin-top:0;">Apagar</button>
+              </form>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <p class="section-label">Nova meta</p>
+        <form method="post" action="">
+          <input type="hidden" name="action" value="add_goal">
+          <?= csrf_field() ?>
+          <div class="form-stack">
+            <div class="form-field"><label>Nome</label><input type="text" name="goal_name" required maxlength="80" placeholder="Ex: Férias de verão"></div>
+            <div class="form-field"><label>Objetivo (€)</label><input type="number" name="goal_target" step="0.01" min="0.01" required></div>
+            <div class="form-field"><label>Valor atual (€)</label><input type="number" name="goal_current" step="0.01" min="0" value="0"></div>
+            <div class="form-field"><label>Prazo</label><input type="date" name="goal_deadline"></div>
+            <div class="form-field"><label>Notas</label><input type="text" name="goal_desc" maxlength="200"></div>
+            <button type="submit" class="btn">Adicionar meta</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Painel 06: Despesas Recorrentes (full) -->
+    <div class="panel panel-full">
+      <div class="panel-caption">
+        <span>Despesas Recorrentes</span>
+        <span class="panel-num">06</span>
+      </div>
+      <div class="panel-body">
+        <p class="section-hint">Despesas fixas mensais. Aplica-as no dashboard para as inserir automaticamente.</p>
+
+        <?php if (!empty($recurring_list)): ?>
+        <div class="item-list" style="margin-bottom:20px;">
+          <?php foreach ($recurring_list as $r): ?>
+          <div class="item-row">
+            <div class="item-info">
+              <div class="item-name">
+                <?= e($r['description']) ?>
+                <?php if (!$r['active']): ?><span style="font-size:0.72rem;color:var(--muted);margin-left:6px;">(inativo)</span><?php endif; ?>
+              </div>
+              <div class="item-meta">Dia <?= (int)$r['day_of_month'] ?> · <?= e($r['category_name'] ?? 'Sem categoria') ?><?= $r['nif'] ? ' · NIF' : '' ?></div>
+            </div>
+            <div class="item-amount"><?= number_format((float)$r['amount'], 2, ',', '.') ?> €</div>
+            <div class="item-actions">
+              <form method="post" action="" style="display:inline;">
+                <input type="hidden" name="action" value="toggle_recurring">
+                <input type="hidden" name="recurring_id" value="<?= (int)$r['id'] ?>">
+                <input type="hidden" name="active" value="<?= $r['active'] ? 0 : 1 ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-ghost" style="margin-top:0;"><?= $r['active'] ? 'Pausar' : 'Ativar' ?></button>
+              </form>
+              <form method="post" action="" style="display:inline;">
+                <input type="hidden" name="action" value="delete_recurring">
+                <input type="hidden" name="recurring_id" value="<?= (int)$r['id'] ?>">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Apagar despesa recorrente?')" style="margin-top:0;">Apagar</button>
+              </form>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <p class="section-label">Nova despesa recorrente</p>
+        <form method="post" action="">
+          <input type="hidden" name="action" value="add_recurring">
+          <?= csrf_field() ?>
+          <div class="rec-form-grid">
+            <div class="form-field rec-full"><label>Descrição</label><input type="text" name="rec_desc" required maxlength="255" placeholder="Ex: Renda"></div>
+            <div class="form-field rec-full"><label>Detalhe</label><input type="text" name="rec_detail" maxlength="500" placeholder="Opcional"></div>
+            <div class="form-field"><label>Valor (€)</label><input type="number" name="rec_amount" step="0.01" min="0.01" required></div>
+            <div class="form-field"><label>Dia do mês</label><input type="number" name="rec_day" min="1" max="28" value="1"></div>
+            <div class="form-field">
+              <label>Categoria</label>
+              <select name="rec_category">
+                <option value="">Sem categoria</option>
+                <?php foreach ($all_categories as $c): ?><option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option><?php endforeach; ?>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>NIF</label>
+              <div style="display:flex;gap:12px;padding-top:4px;">
+                <label style="font-size:0.85rem;font-weight:400;color:var(--text);cursor:pointer;text-transform:none;letter-spacing:0;"><input type="radio" name="rec_nif" value="0" checked style="accent-color:var(--accent);"> Não</label>
+                <label style="font-size:0.85rem;font-weight:400;color:var(--text);cursor:pointer;text-transform:none;letter-spacing:0;"><input type="radio" name="rec_nif" value="1" style="accent-color:var(--accent);"> Sim</label>
+              </div>
+            </div>
+            <button type="submit" class="btn rec-full">Adicionar recorrente</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Painel 07: Etiquetas -->
+    <div class="panel">
+      <div class="panel-caption c-blue">
+        <span>Etiquetas</span>
+        <span class="panel-num">07</span>
+      </div>
+      <div class="panel-body">
+        <?php if (!empty($all_tags)): ?>
+        <div class="cat-list" style="margin-bottom:16px;">
+          <?php foreach ($all_tags as $tag): ?>
+          <span style="display:inline-flex;align-items:center;gap:5px;" class="cat-badge">
+            <?= e($tag['name']) ?>
+            <form method="post" action="" style="display:inline;margin:0;">
+              <input type="hidden" name="action" value="delete_tag">
+              <input type="hidden" name="tag_id" value="<?= (int)$tag['id'] ?>">
+              <?= csrf_field() ?>
+              <button type="submit" style="background:none;border:none;color:inherit;cursor:pointer;font-size:0.75rem;padding:0;line-height:1;" title="Apagar" onclick="return confirm('Apagar etiqueta?')">×</button>
+            </form>
+          </span>
+          <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+        <form method="post" action="" class="inline-form">
+          <input type="hidden" name="action" value="add_tag">
+          <?= csrf_field() ?>
+          <input type="text" name="tag_name" placeholder="Nova etiqueta" maxlength="40" required>
+          <button type="submit" class="btn">Adicionar</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Painel 08: Exportar / Importar -->
+    <div class="panel">
+      <div class="panel-caption c-green">
+        <span>Exportar / Importar</span>
+        <span class="panel-num">08</span>
+      </div>
+      <div class="panel-body">
+        <p style="font-size:0.84rem;color:var(--muted);margin-bottom:14px;">Exporta os teus dados para JSON ou importa de volta.</p>
+        <div class="export-import-row">
+          <a href="./import.php" class="btn btn-ghost">Gerir dados</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Painel 09: Zona de Perigo (full) -->
+    <div class="panel panel-full">
+      <div class="panel-caption c-danger">
+        <span>Zona de Perigo</span>
+        <span class="panel-num">09</span>
+      </div>
+      <div class="panel-body">
+        <p style="font-size:0.84rem;color:var(--muted);margin-bottom:14px;">Terminar sessão remove o acesso imediatamente.</p>
+        <a href="../../config/logout.php" class="btn btn-danger">Terminar sessão</a>
+      </div>
+    </div>
+
+  </div><!-- /comic-grid -->
+</div><!-- /page -->
 </body>
 </html>

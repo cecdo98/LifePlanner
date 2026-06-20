@@ -40,27 +40,45 @@
       $types .= "i"; $params[] = $tag_id;
   }
 
-  $where = implode(" AND ", $conditions);
-  $stmt = $conn->prepare("
+  $where   = implode(" AND ", $conditions);
+  $perPage = 50;
+  $page    = max(1, (int)($_GET['page'] ?? 1));
+  $offset  = ($page - 1) * $perPage;
+
+  // Total filtrado (soma e contagem — sem LIMIT)
+  $stmtAgg = $conn->prepare("SELECT COUNT(*) AS cnt, COALESCE(SUM(t.amount),0) AS total FROM transactions t LEFT JOIN categories c ON c.id = t.category_id WHERE $where");
+  $refsAgg = [];
+  foreach ($params as $k => $v) $refsAgg[$k] = &$params[$k];
+  $stmtAgg->bind_param($types, ...$refsAgg);
+  $stmtAgg->execute();
+  $aggRow     = $stmtAgg->get_result()->fetch_assoc();
+  $total      = (float)$aggRow['total'];
+  $totalCount = (int)$aggRow['cnt'];
+  $totalPages = max(1, (int)ceil($totalCount / $perPage));
+  $page       = min($page, $totalPages);
+  $offset     = ($page - 1) * $perPage;
+
+  // Página actual
+  $stmtPage = $conn->prepare("
       SELECT t.id, t.amount, t.date, t.description, t.detail, t.nif, c.name AS categoria, c.id AS category_id
       FROM transactions t
       LEFT JOIN categories c ON c.id = t.category_id
       WHERE $where
       ORDER BY t.date DESC, t.id DESC
-      LIMIT 300
+      LIMIT $perPage OFFSET $offset
   ");
-  $refs = [];
-  foreach ($params as $k => $v) { $refs[$k] = &$params[$k]; }
-  $stmt->bind_param($types, ...$refs);
-  $stmt->execute();
-  $result = $stmt->get_result();
+  $refsPage = [];
+  foreach ($params as $k => $v) $refsPage[$k] = &$params[$k];
+  $stmtPage->bind_param($types, ...$refsPage);
+  $stmtPage->execute();
+  $rows = $stmtPage->get_result()->fetch_all(MYSQLI_ASSOC);
 
+  // Batch load de etiquetas (1 query em vez de N)
+  $tagsByTxn = get_tags_for_transactions($conn, array_column($rows, 'id'));
   $transactions = [];
-  $total = 0;
-  while ($row = $result->fetch_assoc()) {
+  foreach ($rows as $row) {
       $row['amount'] = (float)$row['amount'];
-      $row['tags']   = get_transaction_tags($conn, (int)$row['id']);
-      $total += $row['amount'];
+      $row['tags']   = $tagsByTxn[(int)$row['id']] ?? [];
       $transactions[] = $row;
   }
 ?>
@@ -79,9 +97,19 @@
 <nav>
   <span class="nav-brand">LifePlanner</span>
   <ul class="nav-links" id="nav-links">
-    <?php foreach ($navLinks as [$href, $label]): ?>
+    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
     <li><a href="<?= e($href) ?>" <?= strpos($href, 'movements') !== false ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
     <?php endforeach; ?>
+    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
+    <li class="nav-dropdown">
+      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
+      <ul class="nav-dropdown-menu">
+        <?php foreach ($catLinks as [$href, $label]): ?>
+        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </li>
+    <?php endif; ?>
   </ul>
   <div class="nav-controls">
     <ul class="nav-right">
@@ -105,7 +133,7 @@
     </div>
     <div class="kpi-card blue">
       <div class="kpi-label">Registos</div>
-      <div class="kpi-value"><?= count($transactions) ?></div>
+      <div class="kpi-value"><?= $totalCount ?></div>
     </div>
   </div>
 
@@ -140,7 +168,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">Histórico<?= count($transactions) >= 300 ? ' <span style="font-weight:400">(limite 300)</span>' : '' ?></div>
+    <div class="card-title">Histórico — pág. <?= $page ?>/<?= $totalPages ?> <span style="font-weight:400;font-size:0.82rem;">(<?= $totalCount ?> registo<?= $totalCount !== 1 ? 's' : '' ?>)</span></div>
     <?php if (empty($transactions)): ?>
       <p class="text-muted">Sem movimentos para os filtros selecionados.</p>
     <?php else: ?>
@@ -184,6 +212,30 @@
         <?php endforeach; ?>
       </tbody>
     </table>
+    <?php endif; ?>
+
+    <?php if ($totalPages > 1): ?>
+    <?php
+      $qParams = array_filter(['q'=>$q,'category_id'=>$category_id,'nif'=>$nif!=='all'?$nif:null,'date_from'=>$date_from,'date_to'=>$date_to,'tag_id'=>$tag_id]);
+      $qStr = $qParams ? '&' . http_build_query($qParams) : '';
+    ?>
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:14px;flex-wrap:wrap;">
+      <?php if ($page > 1): ?>
+        <a href="movements.php?page=<?= $page - 1 ?><?= $qStr ?>" class="btn btn-sm btn-ghost">← Anterior</a>
+      <?php endif; ?>
+      <?php
+        $start = max(1, $page - 2);
+        $end   = min($totalPages, $page + 2);
+        if ($start > 1) echo '<span style="color:var(--muted)">…</span>';
+        for ($p = $start; $p <= $end; $p++):
+      ?>
+        <a href="movements.php?page=<?= $p ?><?= $qStr ?>" class="btn btn-sm <?= $p === $page ? '' : 'btn-ghost' ?>"><?= $p ?></a>
+      <?php endfor; ?>
+      <?php if ($end < $totalPages) echo '<span style="color:var(--muted)">…</span>'; ?>
+      <?php if ($page < $totalPages): ?>
+        <a href="movements.php?page=<?= $page + 1 ?><?= $qStr ?>" class="btn btn-sm btn-ghost">Próxima →</a>
+      <?php endif; ?>
+    </div>
     <?php endif; ?>
   </div>
 </div>

@@ -63,6 +63,7 @@ nav {
 }
 #nav-links {
   display: flex;
+  align-items: center;
   gap: 2px;
   list-style: none;
   flex-wrap: wrap;
@@ -123,6 +124,32 @@ nav {
 #nav-hamburger.open .bar:nth-child(1) { transform: translateY(5px) rotate(45deg); }
 #nav-hamburger.open .bar:nth-child(2) { opacity: 0; }
 #nav-hamburger.open .bar:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+
+/* ── Nav dropdown ─────────────────────────────────── */
+.nav-dropdown { position: relative; }
+.nav-dropdown-btn {
+  background: none; border: none; color: var(--muted); font-size: 0.82rem; font-weight: 500;
+  padding: 5px 10px; border-radius: 5px; cursor: pointer; font-family: var(--font);
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.nav-dropdown-btn:hover,
+.nav-dropdown.open .nav-dropdown-btn { background: var(--bg); color: var(--text); }
+.nav-dropdown-btn.has-active { color: var(--accent); }
+.nav-dropdown-menu {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12); min-width: 160px; max-height: 300px;
+  overflow-y: auto; z-index: 300; padding: 4px; list-style: none;
+}
+.nav-dropdown.open .nav-dropdown-menu { display: block; }
+.nav-dropdown-menu a {
+  display: block; padding: 7px 12px; font-size: 0.82rem; color: var(--muted);
+  text-decoration: none; border-radius: 5px; white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
+}
+.nav-dropdown-menu a:hover { background: var(--bg); color: var(--text); }
+.nav-dropdown-menu a.active { color: var(--accent); font-weight: 600; }
 
 /* ── Layout ──────────────────────────────────────── */
 .page { padding: 24px; max-width: 1380px; margin: 0 auto; }
@@ -211,6 +238,12 @@ nav {
   color: var(--muted);
 }
 .btn-ghost:hover { border-color: var(--text); color: var(--text); opacity: 1; }
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+.btn-danger:hover { background: rgba(220,38,38,0.08); opacity: 1; }
 .btn-sm { padding: 4px 10px; font-size: 0.75rem; }
 
 /* ── KPI row ─────────────────────────────────────── */
@@ -313,6 +346,34 @@ nav {
   align-items: start;
 }
 
+/* ── Tab card ────────────────────────────────────── */
+.tab-card { padding-top: 0; }
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin: 0 -18px 14px;
+  padding: 0 4px;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 11px 14px;
+  font-family: var(--font);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--transition), border-color var(--transition);
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
 /* ── Salary panel ────────────────────────────────── */
 .salary-panel input[type="number"] {
   background: var(--bg);
@@ -346,6 +407,37 @@ nav {
 .goal-name { font-size: 0.84rem; font-weight: 500; }
 .goal-pct  { font-size: 0.75rem; color: var(--muted); }
 .goal-amounts { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+.goal-deadline { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+/* ── Income rows ─────────────────────────────────── */
+.income-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.86rem;
+}
+.income-row:last-child { border-bottom: none; }
+.income-row-info { flex: 1; min-width: 0; }
+.income-row-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.income-row-date { font-size: 0.77rem; color: var(--muted); margin-top: 1px; }
+.income-row-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.income-amount { color: var(--green); font-weight: 600; white-space: nowrap; }
+.income-form { display: grid; gap: 6px; }
+.income-form input {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.income-form input:focus { border-color: var(--accent); }
+.income-form-row { display: grid; grid-template-columns: 1fr; gap: 6px; }
 
 /* ── Charts ──────────────────────────────────────── */
 .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }

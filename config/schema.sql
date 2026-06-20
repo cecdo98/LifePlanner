@@ -91,3 +91,22 @@ CREATE INDEX IF NOT EXISTS idx_budgets_user_month ON category_budgets(user_id, y
 CREATE INDEX IF NOT EXISTS idx_goals_user ON savings_goals(user_id);
 CREATE INDEX IF NOT EXISTS idx_recurring_user ON recurring_expenses(user_id);
 CREATE INDEX IF NOT EXISTS idx_tags_user ON tags(user_id);
+
+CREATE TABLE IF NOT EXISTS income_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT NOT NULL,
+    date TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS recurring_auto_applied (
+    user_id INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    PRIMARY KEY (user_id, year, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_income_user_month ON income_entries(user_id, year, month);

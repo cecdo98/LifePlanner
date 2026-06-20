@@ -6,7 +6,11 @@
     }
 
     function build_nav_links($categories) {
-        $links = [["../dashboard/dashboard.php", "Inicio"], ["../movements/movements.php", "Movimentos"]];
+        $links = [
+            ["../dashboard/dashboard.php", "Inicio"],
+            ["../movements/movements.php", "Movimentos"],
+            ["../report/report.php", "Relatório"],
+        ];
         foreach ($categories as $category) {
             $links[] = ["../options/option.php?cat=" . $category['id'], $category['name']];
         }
@@ -92,32 +96,109 @@
     function apply_recurring_for_month($conn, $userId, $year, $month) {
         $recurring = get_recurring_expenses($conn, $userId);
         $applied = 0;
-        foreach ($recurring as $r) {
-            if (!$r['active']) continue;
-            $rid = (int)$r['id'];
-            $check = $conn->prepare("SELECT 1 FROM recurring_applied WHERE recurring_id=? AND user_id=? AND year=? AND month=?");
-            $check->bind_param("iiii", $rid, $userId, $year, $month);
-            $check->execute();
-            if ($check->get_result()->fetch_assoc()) continue;
+        $conn->begin_transaction();
+        try {
+            foreach ($recurring as $r) {
+                if (!$r['active']) continue;
+                $rid = (int)$r['id'];
+                $check = $conn->prepare("SELECT 1 FROM recurring_applied WHERE recurring_id=? AND user_id=? AND year=? AND month=?");
+                $check->bind_param("iiii", $rid, $userId, $year, $month);
+                $check->execute();
+                if ($check->get_result()->fetch_assoc()) continue;
 
-            $day = min((int)$r['day_of_month'], cal_days_in_month(CAL_GREGORIAN, $month, $year));
-            $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
-            $catId = $r['category_id'];
-            $amount = (float)$r['amount'];
-            $desc = $r['description'];
-            $detail = $r['detail'];
-            $nif = (int)$r['nif'];
+                $day = min((int)$r['day_of_month'], cal_days_in_month(CAL_GREGORIAN, $month, $year));
+                $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
+                $catId = $r['category_id'];
+                $amount = (float)$r['amount'];
+                $desc = $r['description'];
+                $detail = $r['detail'];
+                $nif = (int)$r['nif'];
 
-            $ins = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?,?,?,?,?,?,?)");
-            $ins->bind_param("iidsssi", $userId, $catId, $amount, $date, $desc, $detail, $nif);
-            $ins->execute();
+                $ins = $conn->prepare("INSERT INTO transactions (user_id, category_id, amount, date, description, detail, nif) VALUES (?,?,?,?,?,?,?)");
+                $ins->bind_param("iidsssi", $userId, $catId, $amount, $date, $desc, $detail, $nif);
+                $ins->execute();
 
-            $mark = $conn->prepare("INSERT OR IGNORE INTO recurring_applied (recurring_id, user_id, year, month) VALUES (?,?,?,?)");
-            $mark->bind_param("iiii", $rid, $userId, $year, $month);
-            $mark->execute();
-            $applied++;
+                $mark = $conn->prepare("INSERT OR IGNORE INTO recurring_applied (recurring_id, user_id, year, month) VALUES (?,?,?,?)");
+                $mark->bind_param("iiii", $rid, $userId, $year, $month);
+                $mark->execute();
+                $applied++;
+            }
+            $conn->commit();
+        } catch (Exception $e) {
+            $conn->rollback();
+            return 0;
         }
         return $applied;
+    }
+
+    function get_pending_recurring($conn, $userId, $year, $month) {
+        $recurring = get_recurring_expenses($conn, $userId);
+        $active = array_values(array_filter($recurring, fn($r) => $r['active']));
+        if (empty($active)) return [];
+
+        $ids = array_column($active, 'id');
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $conn->prepare("SELECT recurring_id FROM recurring_applied WHERE user_id=? AND year=? AND month=? AND recurring_id IN ($placeholders)");
+        $params = array_merge([$userId, $year, $month], $ids);
+        $types = 'iii' . str_repeat('i', count($ids));
+        $refs = [];
+        foreach ($params as $k => $v) $refs[$k] = &$params[$k];
+        $stmt->bind_param($types, ...$refs);
+        $stmt->execute();
+        $appliedIds = array_map('intval', array_column($stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'recurring_id'));
+
+        return array_values(array_filter($active, fn($r) => !in_array((int)$r['id'], $appliedIds)));
+    }
+
+    function get_tags_for_transactions($conn, $ids) {
+        if (empty($ids)) return [];
+        $ids = array_values(array_map('intval', $ids));
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $conn->prepare("
+            SELECT tt.transaction_id, t.id, t.name
+            FROM transaction_tags tt
+            JOIN tags t ON t.id = tt.tag_id
+            WHERE tt.transaction_id IN ($placeholders)
+            ORDER BY t.name ASC
+        ");
+        $types = str_repeat('i', count($ids));
+        $refs = [];
+        foreach ($ids as $k => $v) $refs[$k] = &$ids[$k];
+        $stmt->bind_param($types, ...$refs);
+        $stmt->execute();
+        $map = [];
+        foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+            $map[(int)$row['transaction_id']][] = ['id' => (int)$row['id'], 'name' => $row['name']];
+        }
+        return $map;
+    }
+
+    // --- Income Entries ---
+
+    function get_income_entries($conn, $userId, $year, $month) {
+        $stmt = $conn->prepare("SELECT * FROM income_entries WHERE user_id=? AND year=? AND month=? ORDER BY date ASC, id ASC");
+        $stmt->bind_param("iii", $userId, $year, $month);
+        $stmt->execute();
+        return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    }
+
+    function add_income_entry($conn, $userId, $year, $month, $amount, $description, $date) {
+        $stmt = $conn->prepare("INSERT INTO income_entries (user_id, year, month, amount, description, date) VALUES (?,?,?,?,?,?)");
+        $stmt->bind_param("iiidss", $userId, $year, $month, $amount, $description, $date);
+        return $stmt->execute();
+    }
+
+    function delete_income_entry($conn, $userId, $id) {
+        $stmt = $conn->prepare("DELETE FROM income_entries WHERE id=? AND user_id=?");
+        $stmt->bind_param("ii", $id, $userId);
+        return $stmt->execute();
+    }
+
+    function get_total_income($conn, $userId, $year, $month) {
+        $stmt = $conn->prepare("SELECT COALESCE(SUM(amount),0) AS total FROM income_entries WHERE user_id=? AND year=? AND month=?");
+        $stmt->bind_param("iii", $userId, $year, $month);
+        $stmt->execute();
+        return (float)$stmt->get_result()->fetch_assoc()['total'];
     }
 
     // --- Tags ---
