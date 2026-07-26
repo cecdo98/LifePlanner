@@ -1,5 +1,5 @@
 <?php
-    session_start();
+    include_once "../../config/bootstrap.php";
     include_once "../../config/bd.php";
     include_once "../../config/security.php";
     include_once "../../config/repository.php";
@@ -159,7 +159,7 @@
                     $salary       = (float)$ms['salary'];
                     $final_balance = (float)$ms['final_balance'];
 
-                    if ($year < 2026 || $year > 2070 || $month < 1 || $month > 12) {
+                    if ($year < LP_MIN_YEAR || $year > LP_MAX_YEAR || $month < 1 || $month > 12) {
                         continue;
                     }
 
@@ -188,7 +188,7 @@
                     $budgetMonth = (int)$budgetRow['month'];
                     $budget = (float)$budgetRow['budget'];
 
-                    if (!$new_cat_id || $budgetYear < 2026 || $budgetYear > 2070 || $budgetMonth < 1 || $budgetMonth > 12 || $budget < 0) {
+                    if (!$new_cat_id || $budgetYear < LP_MIN_YEAR || $budgetYear > LP_MAX_YEAR || $budgetMonth < 1 || $budgetMonth > 12 || $budget < 0) {
                         continue;
                     }
 
@@ -345,11 +345,7 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links" id="nav-links">
-    <?php foreach ($navLinks as [$href, $label]): ?>
-    <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-    <?php endforeach; ?>
-  </ul>
+  <?= render_nav($navLinks) ?>
   <div class="nav-controls">
     <ul class="nav-right">
       <li><a href="../settings/settings.php" class="active">Definições</a></li>
@@ -409,15 +405,14 @@
         <form action="export.php" method="get" class="export-filter-form">
             <select name="year">
                 <option value="">Todos os anos</option>
-                <?php for ($y = 2026; $y <= 2070; $y++): ?>
+                <?php for ($y = LP_MIN_YEAR; $y <= LP_MAX_YEAR; $y++): ?>
                 <option value="<?= $y ?>"><?= $y ?></option>
                 <?php endfor; ?>
             </select>
             <select name="month">
                 <option value="">Todos os meses</option>
                 <?php
-                $monthsExport = [1=>'Janeiro',2=>'Fevereiro',3=>'Marco',4=>'Abril',5=>'Maio',6=>'Junho',7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro'];
-                foreach ($monthsExport as $num => $name):
+                foreach (month_names(true) as $num => $name):
                 ?>
                 <option value="<?= $num ?>"><?= e($name) ?></option>
                 <?php endforeach; ?>

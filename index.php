@@ -1,5 +1,5 @@
 <?php
-  session_start();
+  include_once "./config/bootstrap.php";
   include_once "./config/bd.php";
   include_once "./config/security.php";
 
@@ -36,14 +36,15 @@
       if ($result->num_rows > 0) {
           $user = $result->fetch_assoc();
           if (password_verify($password, $user['password_hash'])) {
+              session_regenerate_id(true);
               $_SESSION['user_id']  = $user['id'];
               $_SESSION['username'] = $user['username'];
               header('Location: ./main/dashboard/dashboard.php');
               exit();
           }
-          return "Password incorreta.";
       }
-      return "Utilizador nao encontrado.";
+      // Mensagem genérica: não revelar se o username existe ou não (evita enumeração de utilizadores).
+      return "Credenciais invalidas.";
   }
 ?>
 <!DOCTYPE html>

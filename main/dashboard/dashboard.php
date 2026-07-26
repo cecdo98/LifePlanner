@@ -1,5 +1,5 @@
 <?php
-    session_start();
+    include_once "../../config/bootstrap.php";
     include_once "../../config/bd.php";
     include_once "../../config/security.php";
     include_once "../../config/repository.php";
@@ -10,7 +10,8 @@
     $year    = validate_year($_GET['year'] ?? null);
     $month   = validate_month($_GET['month'] ?? null);
     $nif     = validate_nif_filter($_GET['nif'] ?? 'all');
-    $success = flash_message($_GET['msg'] ?? '');
+    $msgKey  = $_GET['msg'] ?? '';
+    $success = flash_message($msgKey);
 
     // POST: aplicar recorrentes / gerir rendimentos
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -20,36 +21,32 @@
         $pMonth  = validate_month($_POST['month'] ?? null);
 
         if ($pAction === 'apply_recurring') {
-            apply_recurring_for_month($conn, $user_id, $pYear, $pMonth);
-            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=recurring_applied");
+            $applied = apply_recurring_for_month($conn, $user_id, $pYear, $pMonth);
+            $msg = $applied > 0 ? 'recurring_applied' : 'recurring_none';
+            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=$msg");
             exit();
         }
         if ($pAction === 'add_income') {
             $iAmt  = filter_var($_POST['income_amount'] ?? 0, FILTER_VALIDATE_FLOAT);
             $iDesc = trim($_POST['income_desc'] ?? '');
             $iDate = $_POST['income_date'] ?? '';
-            if ($iAmt !== false && $iAmt > 0 && $iDesc !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $iDate)) {
+            $valid = $iAmt !== false && $iAmt > 0 && $iDesc !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $iDate);
+            if ($valid) {
                 add_income_entry($conn, $user_id, $pYear, $pMonth, $iAmt, $iDesc, $iDate);
             }
-            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=income_saved");
+            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=" . ($valid ? 'income_saved' : 'income_invalid'));
             exit();
         }
         if ($pAction === 'delete_income') {
             $iId = intval($_POST['income_id'] ?? 0);
-            if ($iId > 0) delete_income_entry($conn, $user_id, $iId);
-            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=income_deleted");
+            $deleted = $iId > 0 && delete_income_entry($conn, $user_id, $iId);
+            header("Location: dashboard.php?year=$pYear&month=$pMonth&msg=" . ($deleted ? 'income_deleted' : 'action_failed'));
             exit();
         }
     }
 
-    $meses = [
-        1=>"Jan",2=>"Fev",3=>"Mar",4=>"Abr",5=>"Mai",6=>"Jun",
-        7=>"Jul",8=>"Ago",9=>"Set",10=>"Out",11=>"Nov",12=>"Dez"
-    ];
-    $mesesFull = [
-        1=>"Janeiro",2=>"Fevereiro",3=>"Marco",4=>"Abril",5=>"Maio",6=>"Junho",
-        7=>"Julho",8=>"Agosto",9=>"Setembro",10=>"Outubro",11=>"Novembro",12=>"Dezembro"
-    ];
+    $meses     = month_names(false);
+    $mesesFull = month_names(true);
 
     // Ordenado
     $stmtSalary = $conn->prepare("SELECT salary FROM monthly_summary WHERE user_id = ? AND year = ? AND month = ?");
@@ -283,21 +280,7 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links" id="nav-links">
-    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
-    <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-    <?php endforeach; ?>
-    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
-    <li class="nav-dropdown">
-      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
-      <ul class="nav-dropdown-menu">
-        <?php foreach ($catLinks as [$href, $label]): ?>
-        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-        <?php endforeach; ?>
-      </ul>
-    </li>
-    <?php endif; ?>
-  </ul>
+  <?= render_nav($navLinks, 'dashboard.php') ?>
   <div class="nav-controls">
     <ul class="nav-right">
       <li><a href="../settings/settings.php">Definições</a></li>
@@ -316,7 +299,7 @@
   </div>
 
   <?php if ($success): ?>
-  <div class="alert alert-success"><?= e($success) ?></div>
+  <div class="alert <?= flash_type($msgKey) ?>"><?= e($success) ?></div>
   <?php endif; ?>
 
   <?php if ($overBudgetCount > 0): ?>
@@ -332,7 +315,7 @@
         <strong><?= count($pendingRecurring) ?> despesa<?= count($pendingRecurring) !== 1 ? 's' : '' ?> recorrente<?= count($pendingRecurring) !== 1 ? 's' : '' ?> por aplicar em <?= e($mesesFull[$month]) ?>:</strong>
         <ul style="margin:5px 0 0 16px;padding:0;font-size:0.87rem;">
           <?php foreach ($pendingRecurring as $pr): ?>
-          <li><?= e($pr['description']) ?> — <?= number_format((float)$pr['amount'], 2, ',', '.') ?> €</li>
+          <li><?= e($pr['description']) ?> — <?= money($pr['amount']) ?></li>
           <?php endforeach; ?>
         </ul>
       </div>
@@ -353,7 +336,7 @@
       <div class="filter-group">
         <label>Ano</label>
         <select name="year">
-          <?php for ($i = 2026; $i <= 2070; $i++): ?>
+          <?php for ($i = LP_MIN_YEAR; $i <= LP_MAX_YEAR; $i++): ?>
           <option value="<?= $i ?>" <?= $i == $year ? 'selected' : '' ?>><?= $i ?></option>
           <?php endfor; ?>
         </select>
@@ -382,18 +365,18 @@
   <div class="kpi-row">
     <div class="kpi-card red">
       <div class="kpi-label">Total Gasto</div>
-      <div class="kpi-value"><?= number_format($totalGasto, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($totalGasto) ?></div>
     </div>
     <div class="kpi-card blue">
       <div class="kpi-label">Total Rendimentos</div>
-      <div class="kpi-value"><?= number_format($totalIncome, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($totalIncome) ?></div>
       <?php if ($otherIncome > 0): ?>
-      <div class="kpi-note">Ordenado <?= number_format($salary, 2, ',', '.') ?> € + outros <?= number_format($otherIncome, 2, ',', '.') ?> €</div>
+      <div class="kpi-note">Ordenado <?= money($salary) ?> + outros <?= money($otherIncome) ?></div>
       <?php endif; ?>
     </div>
     <div class="kpi-card <?= $restante >= 0 ? 'green' : 'red' ?>">
       <div class="kpi-label">Saldo Restante</div>
-      <div class="kpi-value"><?= number_format($restante, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($restante) ?></div>
     </div>
     <div class="kpi-card blue">
       <div class="kpi-label">% Gasto</div>
@@ -409,7 +392,7 @@
     <?php if ($forecast !== null): ?>
     <div class="kpi-card orange">
       <div class="kpi-label">Previsão Fim do Mês</div>
-      <div class="kpi-value"><?= number_format($forecast, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($forecast) ?></div>
       <div class="kpi-note">Dia <?= $daysElapsed ?> de <?= $daysInMonth ?></div>
     </div>
     <?php endif; ?>
@@ -440,9 +423,9 @@
             <tr>
               <td class="cat-name"><?= e($row['categoria']) ?></td>
               <td style="text-align:right" class="<?= $amount > 0 ? 'amount-pos' : 'amount-zero' ?>">
-                <?= number_format($amount, 2, ',', '.') ?> €
+                <?= money($amount) ?>
               </td>
-              <td style="text-align:right"><?= $budget > 0 ? number_format($budget, 2, ',', '.') . ' €' : '—' ?></td>
+              <td style="text-align:right"><?= $budget > 0 ? money($budget) : '—' ?></td>
               <td style="text-align:right">
                 <?php if ($budget <= 0): ?>
                   <span class="status-muted">Sem limite</span>
@@ -493,7 +476,7 @@
                 <div class="income-row-date"><?= date('d/m/Y', strtotime($ie['date'])) ?></div>
               </div>
               <div class="income-row-right">
-                <span class="income-amount">+<?= number_format((float)$ie['amount'], 2, ',', '.') ?> €</span>
+                <span class="income-amount">+<?= money($ie['amount']) ?></span>
                 <form method="post" action="dashboard.php" style="display:inline;margin:0;">
                   <?= csrf_field() ?>
                   <input type="hidden" name="action" value="delete_income">
@@ -541,7 +524,7 @@
           <div class="top-cat-item">
             <div class="top-cat-meta">
               <span class="top-cat-name"><?= e($tc['categoria']) ?></span>
-              <span class="top-cat-amount"><?= number_format($tc['total'], 2, ',', '.') ?> €</span>
+              <span class="top-cat-amount"><?= money($tc['total']) ?></span>
             </div>
             <div class="progress-bar">
               <div class="progress-fill" style="width:<?= $pct ?>%;background:<?= $color ?>"></div>
@@ -575,8 +558,8 @@
           <div class="goal-fill" style="width:<?= $gpct ?>%;background:<?= $gcolor ?>"></div>
         </div>
         <div class="goal-amounts">
-          <span><?= number_format((float)$g['current_amount'], 2, ',', '.') ?> €</span>
-          <span>de <?= number_format((float)$g['target_amount'], 2, ',', '.') ?> €</span>
+          <span><?= money($g['current_amount']) ?></span>
+          <span>de <?= money($g['target_amount']) ?></span>
         </div>
         <?php if ($g['deadline']): ?>
         <div class="goal-deadline">Prazo: <?= date('d/m/Y', strtotime($g['deadline'])) ?></div>

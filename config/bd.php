@@ -9,6 +9,9 @@
         private $pdoStmt;
         private $params = [];
         private $result = [];
+        // Espelha mysqli_stmt::$affected_rows, para permitir aos chamadores
+        // confirmar se um UPDATE/DELETE mudou alguma linha (não apenas se a query correu sem erro).
+        public $affected_rows = 0;
 
         public function __construct($pdoStmt) {
             $this->pdoStmt = $pdoStmt;
@@ -33,6 +36,7 @@
                 }
 
                 $res = $this->pdoStmt->execute();
+                $this->affected_rows = $res ? $this->pdoStmt->rowCount() : 0;
                 if ($res && preg_match('/^\s*(SELECT|PRAGMA)/i', $this->pdoStmt->queryString)) {
                     $this->result = $this->pdoStmt->fetchAll(PDO::FETCH_ASSOC);
                 }
@@ -126,8 +130,8 @@
     if (!empty($localConfig['db_path'])) {
         $candidatePaths[] = $localConfig['db_path'];
     }
-    $candidatePaths[] = "C:\Users\carlo\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
-    $candidatePaths[] = "C:\Users\Carlos\OneDrive\Ambiente de Trabalho\Engenharia de Informática\pessoal/financas.sqlite";
+    $candidatePaths[] = "C:\Users\carlo\OneDrive\Ambiente de Trabalho\pessoal/financas.sqlite";
+    $candidatePaths[] = "C:\Users\Carlos\OneDrive\Ambiente de Trabalho\pessoal/financas.sqlite";
     $candidatePaths[] = __DIR__ . "/financas.sqlite";
 
     $dbFinal = null;

@@ -1,5 +1,5 @@
 <?php
-  session_start();
+  include_once "../../config/bootstrap.php";
   include_once "../../config/bd.php";
   include_once "../../config/security.php";
   include_once "../../config/repository.php";
@@ -25,8 +25,8 @@
           $row = $stmt->get_result()->fetch_assoc();
           if (!$row || !password_verify($current, $row['password_hash'])) {
               $error = 'A password atual está incorreta.';
-          } elseif (strlen($new) < 6) {
-              $error = 'A nova password deve ter pelo menos 6 caracteres.';
+          } elseif (strlen($new) < 10) {
+              $error = 'A nova password deve ter pelo menos 10 caracteres.';
           } elseif ($new !== $confirm) {
               $error = 'As passwords não coincidem.';
           } else {
@@ -86,9 +86,34 @@
           if ($cat_id === $move_to_id) { $error = 'Escolhe uma categoria diferente.'; }
           elseif ($cat_id <= 0 || $move_to_id <= 0 || !category_exists($conn, $cat_id) || !category_exists($conn, $move_to_id)) { $error = 'Categoria inválida.'; }
           else {
+              // Mover todas as referências do utilizador (transações, orçamentos e
+              // despesas recorrentes) antes de considerar a categoria livre para apagar.
+              // Sem isto, category_budgets/recurring_expenses ficavam com um category_id
+              // órfão, já que o schema não tem FOREIGN KEYs a impedir isso.
               $stmt = $conn->prepare("UPDATE transactions SET category_id = ? WHERE category_id = ? AND user_id = ?");
               $stmt->bind_param("iii", $move_to_id, $cat_id, $user_id);
               $stmt->execute();
+
+              // "OR IGNORE": se já existir um orçamento para (utilizador, categoria destino,
+              // ano, mês) — violando o UNIQUE(user_id, category_id, year, month) — ignora
+              // essa linha em vez de abortar a atualização toda; a linha antiga fica por
+              // apagar, mas isso é preferível a perder silenciosamente as restantes.
+              $stmt = $conn->prepare("UPDATE OR IGNORE category_budgets SET category_id = ? WHERE category_id = ? AND user_id = ?");
+              $stmt->bind_param("iii", $move_to_id, $cat_id, $user_id);
+              $stmt->execute();
+
+              $stmt = $conn->prepare("UPDATE recurring_expenses SET category_id = ? WHERE category_id = ? AND user_id = ?");
+              $stmt->bind_param("iii", $move_to_id, $cat_id, $user_id);
+              $stmt->execute();
+
+              // Qualquer linha de orçamento que o "OR IGNORE" acima não conseguiu mover
+              // (conflito com um orçamento já existente na categoria destino) é apagada
+              // aqui, para garantir que nunca fica um category_budgets a apontar para
+              // uma categoria entretanto eliminada.
+              $stmt = $conn->prepare("DELETE FROM category_budgets WHERE category_id = ? AND user_id = ?");
+              $stmt->bind_param("ii", $cat_id, $user_id);
+              $stmt->execute();
+
               $stmt = $conn->prepare("SELECT id FROM transactions WHERE category_id = ? LIMIT 1");
               $stmt->bind_param("i", $cat_id);
               $stmt->execute();
@@ -226,7 +251,13 @@
               $stmt = $conn->prepare("INSERT OR IGNORE INTO tags (user_id, name) VALUES (?,?)");
               $stmt->bind_param("is", $user_id, $name);
               $stmt->execute();
-              $success = flash_message('tag_saved');
+              // affected_rows fica a 0 quando o "OR IGNORE" descarta uma etiqueta duplicada;
+              // settings.php só distingue $success/$error, por isso o duplicado vai para $error.
+              if ($stmt->affected_rows > 0) {
+                  $success = flash_message('tag_saved');
+              } else {
+                  $error = flash_message('tag_exists');
+              }
           }
       }
 
@@ -234,13 +265,23 @@
       if ($action === 'delete_tag') {
           $tid = intval($_POST['tag_id'] ?? 0);
           if ($tid > 0) {
-              $stmt = $conn->prepare("DELETE FROM transaction_tags WHERE tag_id = ?");
-              $stmt->bind_param("i", $tid);
+              // Confirmar posse ANTES de tocar em transaction_tags — a ordem antiga
+              // apagava as associações de qualquer tag_id, mesmo de outro utilizador,
+              // antes de validar o "WHERE user_id = ?" no DELETE de tags.
+              $stmt = $conn->prepare("SELECT id FROM tags WHERE id = ? AND user_id = ?");
+              $stmt->bind_param("ii", $tid, $user_id);
               $stmt->execute();
-              $stmt2 = $conn->prepare("DELETE FROM tags WHERE id = ? AND user_id = ?");
-              $stmt2->bind_param("ii", $tid, $user_id);
-              $stmt2->execute();
-              $success = flash_message('tag_deleted');
+              if ($stmt->get_result()->fetch_assoc()) {
+                  $del = $conn->prepare("DELETE FROM transaction_tags WHERE tag_id = ?");
+                  $del->bind_param("i", $tid);
+                  $del->execute();
+                  $stmt2 = $conn->prepare("DELETE FROM tags WHERE id = ? AND user_id = ?");
+                  $stmt2->bind_param("ii", $tid, $user_id);
+                  $stmt2->execute();
+                  $success = flash_message('tag_deleted');
+              } else {
+                  $error = flash_message('action_failed');
+              }
           }
       }
   }
@@ -268,8 +309,7 @@
   $recurring_list   = get_recurring_expenses($conn, $user_id);
   $all_tags         = get_user_tags($conn, $user_id);
   $navLinks = build_nav_links($all_categories);
-  $months = [1=>'Janeiro',2=>'Fevereiro',3=>'Marco',4=>'Abril',5=>'Maio',6=>'Junho',
-             7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro'];
+  $months = month_names(true);
 ?>
 <!DOCTYPE html>
 <html lang="pt">
@@ -285,21 +325,7 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links" id="nav-links">
-    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
-    <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-    <?php endforeach; ?>
-    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
-    <li class="nav-dropdown">
-      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
-      <ul class="nav-dropdown-menu">
-        <?php foreach ($catLinks as [$href, $label]): ?>
-        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-        <?php endforeach; ?>
-      </ul>
-    </li>
-    <?php endif; ?>
-  </ul>
+  <?= render_nav($navLinks) ?>
   <div class="nav-controls">
     <ul class="nav-right">
       <li><a href="../settings/settings.php" class="active">Definições</a></li>
@@ -421,7 +447,7 @@
       <div class="panel-body">
         <form method="get" action="" class="delete-cat-row" style="margin-bottom:16px;">
           <select name="budget_year">
-            <?php for ($y=2026;$y<=2070;$y++): ?><option value="<?=$y?>" <?=$y===$budget_year?'selected':''?>><?=$y?></option><?php endfor; ?>
+            <?php for ($y=LP_MIN_YEAR;$y<=LP_MAX_YEAR;$y++): ?><option value="<?=$y?>" <?=$y===$budget_year?'selected':''?>><?=$y?></option><?php endfor; ?>
           </select>
           <select name="budget_month">
             <?php foreach ($months as $n => $nm): ?><option value="<?=$n?>" <?=$n===$budget_month?'selected':''?>><?=e($nm)?></option><?php endforeach; ?>
@@ -480,7 +506,7 @@
               </div>
               <div style="text-align:right;flex-shrink:0;margin-left:12px;">
                 <div style="font-weight:800;color:<?= $gcolor ?>"><?= $gpct ?>%</div>
-                <div class="item-meta"><?= number_format((float)$g['current_amount'],2,',','.') ?> / <?= number_format((float)$g['target_amount'],2,',','.') ?> €</div>
+                <div class="item-meta"><?= money($g['current_amount']) ?> / <?= money($g['target_amount']) ?></div>
               </div>
             </div>
             <div class="goal-bar"><div class="goal-fill" style="width:<?= $gpct ?>%;background:<?= $gcolor ?>"></div></div>
@@ -540,7 +566,7 @@
               </div>
               <div class="item-meta">Dia <?= (int)$r['day_of_month'] ?> · <?= e($r['category_name'] ?? 'Sem categoria') ?><?= $r['nif'] ? ' · NIF' : '' ?></div>
             </div>
-            <div class="item-amount"><?= number_format((float)$r['amount'], 2, ',', '.') ?> €</div>
+            <div class="item-amount"><?= money($r['amount']) ?></div>
             <div class="item-actions">
               <form method="post" action="" style="display:inline;">
                 <input type="hidden" name="action" value="toggle_recurring">

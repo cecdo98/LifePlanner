@@ -1,4 +1,14 @@
 <?php
+    // Fonte única dos nomes dos meses em português — evita divergências como
+    // "Marco" vs "Março" que apareciam repetidas em cada página.
+    function month_names($full = true) {
+        return $full
+            ? [1=>'Janeiro',2=>'Fevereiro',3=>'Março',4=>'Abril',5=>'Maio',6=>'Junho',
+               7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro']
+            : [1=>'Jan',2=>'Fev',3=>'Mar',4=>'Abr',5=>'Mai',6=>'Jun',
+               7=>'Jul',8=>'Ago',9=>'Set',10=>'Out',11=>'Nov',12=>'Dez'];
+    }
+
     function get_categories($conn) {
         $stmt = $conn->prepare("SELECT id, name FROM categories ORDER BY name ASC");
         $stmt->execute();
@@ -15,6 +25,41 @@
             $links[] = ["../options/option.php?cat=" . $category['id'], $category['name']];
         }
         return $links;
+    }
+
+    // Renderiza a barra de navegação de forma consistente em todas as páginas:
+    // os 3 links fixos + um dropdown "Categorias" para o resto. $activeMatch é o
+    // sufixo do URL atual (ex.: "movements.php" ou "cat=5") usado para marcar o
+    // link ativo; passar null quando a página não corresponde a nenhum link fixo
+    // (ex.: dashboard). Usa "termina com" em vez de "contém" para "cat=5" não
+    // corresponder por engano a "cat=51".
+    function render_nav($navLinks, $activeMatch = null) {
+        $fixedLinks = array_slice($navLinks, 0, 3);
+        $catLinks   = array_slice($navLinks, 3);
+        $isActive   = fn($href) => $activeMatch && str_ends_with($href, $activeMatch);
+        $catActive  = false;
+        foreach ($catLinks as [$href, $label]) {
+            if ($isActive($href)) { $catActive = true; break; }
+        }
+        ob_start();
+        ?>
+        <ul class="nav-links" id="nav-links">
+          <?php foreach ($fixedLinks as [$href, $label]): ?>
+          <li><a href="<?= e($href) ?>"<?= $isActive($href) ? ' class="active"' : '' ?>><?= e($label) ?></a></li>
+          <?php endforeach; ?>
+          <?php if (!empty($catLinks)): ?>
+          <li class="nav-dropdown">
+            <button class="nav-dropdown-btn<?= $catActive ? ' has-active' : '' ?>" onclick="toggleNavDropdown(this)">Categorias ▾</button>
+            <ul class="nav-dropdown-menu">
+              <?php foreach ($catLinks as [$href, $label]): ?>
+              <li><a href="<?= e($href) ?>"<?= $isActive($href) ? ' class="active"' : '' ?>><?= e($label) ?></a></li>
+              <?php endforeach; ?>
+            </ul>
+          </li>
+          <?php endif; ?>
+        </ul>
+        <?php
+        return ob_get_clean();
     }
 
     function category_exists($conn, $categoryId) {
@@ -106,7 +151,7 @@
                 $check->execute();
                 if ($check->get_result()->fetch_assoc()) continue;
 
-                $day = min((int)$r['day_of_month'], cal_days_in_month(CAL_GREGORIAN, $month, $year));
+                $day = min((int)$r['day_of_month'], (int)date('t', mktime(0, 0, 0, $month, 1, $year)));
                 $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
                 $catId = $r['category_id'];
                 $amount = (float)$r['amount'];

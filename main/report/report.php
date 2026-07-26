@@ -1,5 +1,5 @@
 <?php
-    session_start();
+    include_once "../../config/bootstrap.php";
     include_once "../../config/bd.php";
     include_once "../../config/security.php";
     include_once "../../config/repository.php";
@@ -12,12 +12,8 @@
     $all_categories = get_categories($conn);
     $navLinks       = build_nav_links($all_categories);
 
-    $mesesFull = [
-        1=>'Janeiro',2=>'Fevereiro',3=>'Março',4=>'Abril',5=>'Maio',6=>'Junho',
-        7=>'Julho',8=>'Agosto',9=>'Setembro',10=>'Outubro',11=>'Novembro',12=>'Dezembro',
-    ];
-    $mesesAbrev = [1=>'Jan',2=>'Fev',3=>'Mar',4=>'Abr',5=>'Mai',6=>'Jun',
-                   7=>'Jul',8=>'Ago',9=>'Set',10=>'Out',11=>'Nov',12=>'Dez'];
+    $mesesFull  = month_names(true);
+    $mesesAbrev = month_names(false);
 
     // ── Resumo mensal + rendimentos extra ─────────────────────────
     $stmtM = $conn->prepare("
@@ -115,21 +111,7 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links" id="nav-links">
-    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
-    <li><a href="<?= e($href) ?>" <?= strpos($href, 'report') !== false ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
-    <?php endforeach; ?>
-    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
-    <li class="nav-dropdown">
-      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
-      <ul class="nav-dropdown-menu">
-        <?php foreach ($catLinks as [$href, $label]): ?>
-        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-        <?php endforeach; ?>
-      </ul>
-    </li>
-    <?php endif; ?>
-  </ul>
+  <?= render_nav($navLinks, 'report.php') ?>
   <div class="nav-controls">
     <ul class="nav-right">
       <li><a href="../settings/settings.php">Definições</a></li>
@@ -148,7 +130,7 @@
     <h1 class="page-title">Relatório <span><?= $year ?></span></h1>
     <form method="get" action="" class="year-bar">
       <select name="year" onchange="this.form.submit()">
-        <?php for ($y = (int)date('Y'); $y >= 2026; $y--): ?>
+        <?php for ($y = (int)date('Y'); $y >= LP_MIN_YEAR; $y--): ?>
         <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?></option>
         <?php endfor; ?>
       </select>
@@ -163,18 +145,18 @@
   <div class="kpi-row">
     <div class="kpi-card blue">
       <div class="kpi-label">Total Rendimentos</div>
-      <div class="kpi-value"><?= number_format($annualIncome, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($annualIncome) ?></div>
       <div class="kpi-note"><?= $monthsWithData ?> mês<?= $monthsWithData !== 1 ? 'es' : '' ?> com dados</div>
     </div>
     <div class="kpi-card red">
       <div class="kpi-label">Total Gasto</div>
-      <div class="kpi-value"><?= number_format($annualSpent, 2, ',', '.') ?> €</div>
-      <div class="kpi-note">Média <?= number_format($monthsWithData > 0 ? $annualSpent / $monthsWithData : 0, 2, ',', '.') ?> €/mês</div>
+      <div class="kpi-value"><?= money($annualSpent) ?></div>
+      <div class="kpi-note">Média <?= money($monthsWithData > 0 ? $annualSpent / $monthsWithData : 0) ?>/mês</div>
     </div>
     <div class="kpi-card <?= $annualSavings >= 0 ? 'green' : 'red' ?>">
       <div class="kpi-label">Total Poupado</div>
-      <div class="kpi-value"><?= number_format($annualSavings, 2, ',', '.') ?> €</div>
-      <div class="kpi-note">Média <?= number_format($avgMonthlySavings, 2, ',', '.') ?> €/mês</div>
+      <div class="kpi-value"><?= money($annualSavings) ?></div>
+      <div class="kpi-note">Média <?= money($avgMonthlySavings) ?>/mês</div>
     </div>
     <div class="kpi-card <?= $annualSavRate >= 20 ? 'green' : ($annualSavRate >= 10 ? 'orange' : 'red') ?>">
       <div class="kpi-label">Taxa de Poupança</div>
@@ -199,26 +181,26 @@
     <div class="highlight-card">
       <div class="highlight-label">Melhor Mês</div>
       <div class="highlight-month"><?= e($mesesFull[$bestMonth]) ?></div>
-      <div class="highlight-val pos">+<?= number_format($bestSavings, 2, ',', '.') ?> € poupados</div>
+      <div class="highlight-val pos">+<?= money($bestSavings) ?> poupados</div>
     </div>
     <?php endif; ?>
     <?php if ($worstMonth): ?>
     <div class="highlight-card">
       <div class="highlight-label">Pior Mês</div>
       <div class="highlight-month"><?= e($mesesFull[$worstMonth]) ?></div>
-      <div class="highlight-val <?= $worstSavings < 0 ? 'neg' : 'pos' ?>"><?= number_format($worstSavings, 2, ',', '.') ?> €</div>
+      <div class="highlight-val <?= $worstSavings < 0 ? 'neg' : 'pos' ?>"><?= money($worstSavings) ?></div>
     </div>
     <?php endif; ?>
     <?php if (!empty($catRows)): ?>
     <div class="highlight-card">
       <div class="highlight-label">Maior Categoria</div>
       <div class="highlight-month"><?= e($catRows[0]['name']) ?></div>
-      <div class="highlight-val neg"><?= number_format((float)$catRows[0]['total'], 2, ',', '.') ?> €</div>
+      <div class="highlight-val neg"><?= money((float)$catRows[0]['total']) ?></div>
     </div>
     <?php endif; ?>
     <div class="highlight-card">
       <div class="highlight-label">Média Poupança / Mês</div>
-      <div class="highlight-month"><?= number_format($avgMonthlySavings, 2, ',', '.') ?> €</div>
+      <div class="highlight-month"><?= money($avgMonthlySavings) ?></div>
       <div class="highlight-val <?= $avgMonthlySavings >= 0 ? 'pos' : 'neg' ?>">
         <?= $avgMonthlySavings >= 0 ? 'positiva' : 'negativa' ?>
       </div>
@@ -266,7 +248,7 @@
           ?>
           <tr>
             <td><?= e($cr['name']) ?></td>
-            <td class="text-right val-neg"><?= number_format((float)$cr['total'], 2, ',', '.') ?> €</td>
+            <td class="text-right val-neg"><?= money((float)$cr['total']) ?></td>
             <td class="text-right text-muted"><?= $pct ?>%</td>
             <td>
               <div class="mini-bar-wrap">
@@ -309,9 +291,9 @@
         ?>
         <tr class="<?= $isBest ? 'month-row-best' : ($isWorst ? 'month-row-worst' : '') ?>">
           <td style="font-weight:500"><?= e($mesesFull[$m]) ?></td>
-          <td class="text-right"><?= number_format($inc, 2, ',', '.') ?> €</td>
-          <td class="text-right val-neg"><?= number_format($spent, 2, ',', '.') ?> €</td>
-          <td class="text-right <?= $savings >= 0 ? 'val-pos' : 'val-neg' ?>"><?= number_format($savings, 2, ',', '.') ?> €</td>
+          <td class="text-right"><?= money($inc) ?></td>
+          <td class="text-right val-neg"><?= money($spent) ?></td>
+          <td class="text-right <?= $savings >= 0 ? 'val-pos' : 'val-neg' ?>"><?= money($savings) ?></td>
           <td class="text-right"><?= number_format($rate, 1, ',', '.') ?>%</td>
           <td>
             <?php if ($rate >= 20): ?>
@@ -329,9 +311,9 @@
         <!-- Totais -->
         <tr style="border-top:2px solid var(--border);font-weight:700;">
           <td>Total <?= $year ?></td>
-          <td class="text-right"><?= number_format($annualIncome, 2, ',', '.') ?> €</td>
-          <td class="text-right val-neg"><?= number_format($annualSpent, 2, ',', '.') ?> €</td>
-          <td class="text-right <?= $annualSavings >= 0 ? 'val-pos' : 'val-neg' ?>"><?= number_format($annualSavings, 2, ',', '.') ?> €</td>
+          <td class="text-right"><?= money($annualIncome) ?></td>
+          <td class="text-right val-neg"><?= money($annualSpent) ?></td>
+          <td class="text-right <?= $annualSavings >= 0 ? 'val-pos' : 'val-neg' ?>"><?= money($annualSavings) ?></td>
           <td class="text-right"><?= number_format($annualSavRate, 1, ',', '.') ?>%</td>
           <td></td>
         </tr>

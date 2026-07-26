@@ -1,5 +1,5 @@
 <?php
-  session_start();
+  include_once "../../config/bootstrap.php";
   include_once "../../config/bd.php";
   include_once "../../config/security.php";
   include_once "../../config/repository.php";
@@ -10,7 +10,8 @@
   $year        = validate_year($_GET['year'] ?? null);
   $user_id     = $_SESSION['user_id'];
   $search      = trim($_GET['q'] ?? '');
-  $success     = flash_message($_GET['msg'] ?? '');
+  $msgKey      = $_GET['msg'] ?? '';
+  $success     = flash_message($msgKey);
 
   // POST: inserir / editar / apagar
   if ($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -18,16 +19,20 @@
 
       if (($_POST['action'] ?? '') === 'delete_transaction') {
           $id_to_delete = intval($_POST['delete_id'] ?? 0);
+          $deleted = false;
           if ($id_to_delete > 0) {
-              // Apagar tags associadas
-              $dt = $conn->prepare("DELETE FROM transaction_tags WHERE transaction_id = ?");
-              $dt->bind_param("i", $id_to_delete);
-              $dt->execute();
               $stmt = $conn->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
               $stmt->bind_param("ii", $id_to_delete, $user_id);
               $stmt->execute();
+              $deleted = $stmt->affected_rows > 0;
+              if ($deleted) {
+                  // Apagar tags associadas só depois de confirmar que a despesa era mesmo do utilizador.
+                  $dt = $conn->prepare("DELETE FROM transaction_tags WHERE transaction_id = ?");
+                  $dt->bind_param("i", $id_to_delete);
+                  $dt->execute();
+              }
           }
-          header("Location: option.php?cat=" . $category_id . "&year=" . $year . "&msg=expense_deleted");
+          header("Location: option.php?cat=" . $category_id . "&year=" . $year . "&msg=" . ($deleted ? 'expense_deleted' : 'action_failed'));
           exit();
       }
 
@@ -43,7 +48,7 @@
       if ($amount === false || $amount < 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)
           || $description === '' || strlen($description) > 255 || strlen($detail) > 1000
           || !category_exists($conn, $category_id)) {
-          header("Location: option.php?cat=" . $category_id . "&year=" . $year);
+          header("Location: option.php?cat=" . $category_id . "&year=" . $year . "&msg=expense_invalid");
           exit();
       }
 
@@ -152,24 +157,7 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links" id="nav-links">
-    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
-    <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-    <?php endforeach; ?>
-    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
-    <li class="nav-dropdown">
-      <button class="nav-dropdown-btn has-active" onclick="toggleNavDropdown(this)">Categorias ▾</button>
-      <ul class="nav-dropdown-menu">
-        <?php foreach ($catLinks as [$href, $label]):
-          $catNum = (int)filter_var($href, FILTER_SANITIZE_NUMBER_INT);
-          $isActive = strpos($href, 'cat=') !== false && $catNum === $category_id;
-        ?>
-        <li><a href="<?= e($href) ?>" <?= $isActive ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
-        <?php endforeach; ?>
-      </ul>
-    </li>
-    <?php endif; ?>
-  </ul>
+  <?= render_nav($navLinks, 'cat=' . $category_id) ?>
   <div class="nav-controls">
     <ul class="nav-right">
       <li><a href="../settings/settings.php">Definições</a></li>
@@ -186,14 +174,14 @@
   <h1 class="page-title"><?= e($nome_categoria) ?></h1>
 
   <?php if ($success): ?>
-  <div class="alert alert-success"><?= e($success) ?></div>
+  <div class="alert <?= flash_type($msgKey) ?>"><?= e($success) ?></div>
   <?php endif; ?>
 
   <!-- KPIs -->
   <div class="kpi-row">
     <div class="kpi-card red">
       <div class="kpi-label">Total Gasto</div>
-      <div class="kpi-value"><?= number_format($totalCategoria, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($totalCategoria) ?></div>
     </div>
     <div class="kpi-card blue">
       <div class="kpi-label">Registos</div>
@@ -210,8 +198,8 @@
       <input type="hidden" name="edit_id" value="<?= $edit_data['id'] ?? '' ?>">
 
       <div class="form-grid">
-        <label>Categoria</label>
-        <select name="category_id" required>
+        <label for="opt-category">Categoria</label>
+        <select id="opt-category" name="category_id" required>
           <?php foreach ($all_categories as $cat): ?>
           <option value="<?= $cat['id'] ?>" <?= ($category_id == $cat['id']) ? 'selected' : '' ?>>
             <?= e($cat['name']) ?>
@@ -219,17 +207,17 @@
           <?php endforeach; ?>
         </select>
 
-        <label>Valor (€)</label>
-        <input type="number" name="amount" step="0.01" min="0" value="<?= e($edit_data['amount'] ?? '') ?>" required>
+        <label for="opt-amount">Valor (€)</label>
+        <input type="number" id="opt-amount" name="amount" step="0.01" min="0" value="<?= e($edit_data['amount'] ?? '') ?>" required>
 
-        <label>Data</label>
-        <input type="date" name="date" value="<?= e($edit_data['date'] ?? date('Y-m-d')) ?>" required>
+        <label for="opt-date">Data</label>
+        <input type="date" id="opt-date" name="date" value="<?= e($edit_data['date'] ?? date('Y-m-d')) ?>" required>
 
-        <label>Descrição</label>
-        <textarea name="description" required><?= e($edit_data['description'] ?? '') ?></textarea>
+        <label for="opt-description">Descrição</label>
+        <textarea id="opt-description" name="description" required><?= e($edit_data['description'] ?? '') ?></textarea>
 
-        <label>Detalhes</label>
-        <textarea name="detail"><?= e($edit_data['detail'] ?? '') ?></textarea>
+        <label for="opt-detail">Detalhes</label>
+        <textarea id="opt-detail" name="detail"><?= e($edit_data['detail'] ?? '') ?></textarea>
 
         <label>NIF</label>
         <div class="radio-group">
@@ -269,7 +257,7 @@
       <form method="get" action="" style="display:flex;gap:8px;align-items:center;margin:0;">
         <input type="hidden" name="cat" value="<?= $category_id ?>">
         <select name="year" onchange="this.form.submit()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-family:var(--font);font-size:0.8rem;outline:none;cursor:pointer;">
-          <?php for ($y = (int)date('Y'); $y >= 2026; $y--): ?>
+          <?php for ($y = (int)date('Y'); $y >= LP_MIN_YEAR; $y--): ?>
           <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?></option>
           <?php endfor; ?>
         </select>
@@ -288,7 +276,7 @@
         <input type="hidden" name="cat" value="<?= $category_id ?>">
         <input type="text" name="q" value="<?= e($search) ?>" placeholder="Pesquisar" class="table-search">
         <select name="year" onchange="this.form.submit()" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:5px;font-family:var(--font);font-size:0.8rem;outline:none;cursor:pointer;">
-          <?php for ($y = (int)date('Y'); $y >= 2026; $y--): ?>
+          <?php for ($y = (int)date('Y'); $y >= LP_MIN_YEAR; $y--): ?>
           <option value="<?= $y ?>" <?= $y === $year ? 'selected' : '' ?>><?= $y ?></option>
           <?php endfor; ?>
         </select>
@@ -328,7 +316,7 @@
           $rowTags = $tagsByTxn[(int)$row['id']] ?? [];
         ?>
         <tr>
-          <td class="amount"><?= number_format($row['amount'], 2, ',', '.') ?> €</td>
+          <td class="amount"><?= money($row['amount']) ?></td>
           <td style="white-space:nowrap"><?= date('d/m/Y', strtotime($row['date'])) ?></td>
           <td><?= e($row['description']) ?></td>
           <td><span class="detail-text"><?= e($row['detail']) ?></span></td>

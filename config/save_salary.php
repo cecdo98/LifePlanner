@@ -1,5 +1,5 @@
 <?php
-    session_start();
+    include_once "./bootstrap.php";
     include_once "./bd.php";
     include_once "./security.php";
 

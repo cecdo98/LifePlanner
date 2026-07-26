@@ -1,7 +1,6 @@
 <?php
-// Initialize the session.
-// If you are using session_name("something"), don't forget it now!
-session_start();
+// Initialize the session (mesmos parâmetros de cookie usados no login, ver bootstrap.php).
+include_once "./bootstrap.php";
 
 // Unset all of the session variables.
 $_SESSION = array();

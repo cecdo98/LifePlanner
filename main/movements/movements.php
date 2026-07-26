@@ -1,5 +1,5 @@
 <?php
-  session_start();
+  include_once "../../config/bootstrap.php";
   include_once "../../config/bd.php";
   include_once "../../config/security.php";
   include_once "../../config/repository.php";
@@ -96,21 +96,7 @@
 
 <nav>
   <span class="nav-brand">LifePlanner</span>
-  <ul class="nav-links" id="nav-links">
-    <?php foreach (array_slice($navLinks, 0, 3) as [$href, $label]): ?>
-    <li><a href="<?= e($href) ?>" <?= strpos($href, 'movements') !== false ? 'class="active"' : '' ?>><?= e($label) ?></a></li>
-    <?php endforeach; ?>
-    <?php $catLinks = array_slice($navLinks, 3); if (!empty($catLinks)): ?>
-    <li class="nav-dropdown">
-      <button class="nav-dropdown-btn" onclick="toggleNavDropdown(this)">Categorias ▾</button>
-      <ul class="nav-dropdown-menu">
-        <?php foreach ($catLinks as [$href, $label]): ?>
-        <li><a href="<?= e($href) ?>"><?= e($label) ?></a></li>
-        <?php endforeach; ?>
-      </ul>
-    </li>
-    <?php endif; ?>
-  </ul>
+  <?= render_nav($navLinks, 'movements.php') ?>
   <div class="nav-controls">
     <ul class="nav-right">
       <li><a href="../settings/settings.php">Definições</a></li>
@@ -129,7 +115,7 @@
   <div class="kpi-row">
     <div class="kpi-card red">
       <div class="kpi-label">Total Filtrado</div>
-      <div class="kpi-value"><?= number_format($total, 2, ',', '.') ?> €</div>
+      <div class="kpi-value"><?= money($total) ?></div>
     </div>
     <div class="kpi-card blue">
       <div class="kpi-label">Registos</div>
@@ -188,7 +174,7 @@
       <tbody>
         <?php foreach ($transactions as $row): ?>
         <tr>
-          <td class="amount"><?= number_format($row['amount'], 2, ',', '.') ?> €</td>
+          <td class="amount"><?= money($row['amount']) ?></td>
           <td style="white-space:nowrap"><?= date('d/m/Y', strtotime($row['date'])) ?></td>
           <td><?= e($row['categoria'] ?? 'Sem categoria') ?></td>
           <td><?= e($row['description']) ?></td>
